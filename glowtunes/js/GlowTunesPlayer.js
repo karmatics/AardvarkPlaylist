@@ -398,143 +398,14 @@ class GlowTunesPlayer {
   }
 
   async load(videoId, veqSourceUrl) {
-    this.handleTransportCleanup();
+      this.handleTransportCleanup();
 
-    if (window.VideoEventQueueClass) window.VideoEventQueueClass.clear();
-    this.originalVeqData = null;
-    this.transposeOffset = 0;
-
-    if (this.synchronizer) this.synchronizer.unloadVEQ();
-    if (window.VideoEventScheduler) window.VideoEventScheduler.stopAndClearQueue();
-
-    if (this.pianoVisuals) {
-      this.pianoVisuals.hide();
-      this.pianoVisuals.loadVeq(null);
-    }
-    if (this.karaokeDisplay) {
-      this.karaokeDisplay.loadVeq(null);
-    }
-
-    const playerOptions = this._determinePlayerOptions(videoId);
-
-    this.videoPlayer?.destroy();
-    this.videoPlayer = null;
-
-    this.videoContainer.innerHTML = '';
-
-    if (this.options.startTime > 0) {
-      this._pendingSeekTime = this.options.startTime;
-    }
-
-    try {
-      this.videoPlayer = new VideoPlayer(
-        {
-          container: this.videoContainer,
-          ...playerOptions,
-          autoplay:
-            this.options.autoplay !== undefined ? this.options.autoplay : true,
-          controls:
-            this.options.controls !== undefined ? this.options.controls : true,
-          startTime: this.options.startTime,
-          endTime: this.options.endTime,
-        },
-        this.handlePlayerStateUpdate.bind(this)
-      );
-
-      if (
-        this.karaokeDisplay &&
-        this.karaokeDisplay.element &&
-        !this.karaokeDisplay.element.isConnected
-      ) {
-        this.notesContainer.appendChild(this.karaokeDisplay.element);
-      }
-
-      this.synchronizer.init(this.videoPlayer);
-    } catch (playerError) {
-      this.videoPlayer = null;
-      this.videoContainer.innerHTML =
-        '<p style="color: red; padding: 20px;">Error creating video player.</p>';
-      throw playerError;
-    }
-
-    try {
-      let veqText;
-      let finalVeqUrl = veqSourceUrl;
-
-      if (finalVeqUrl === 'SKIP') {
-        throw new Error('Skipping VEQ fetch (Globally Disabled)');
-      }
-
-      if (!finalVeqUrl) {
-        const cleanVideoId = (videoId || '').replace(/[^a-zA-Z0-9]/g, '');
-        finalVeqUrl = `/pianorolls/${cleanVideoId}.txt`;
-      }
-
-      const response = await fetch(finalVeqUrl);
-      if (!response.ok) {
-        throw new Error(`VEQ not found (${response.status})`);
-      }
-      veqText = await response.text();
-
-      const VEQ = window.VideoEventQueueClass;
-      const parsedData = VEQ ? VEQ.parse(veqText) : null;
-
-      if (
-        !parsedData ||
-        !parsedData.timedEvents ||
-        parsedData.timedEvents.length === 0
-      ) {
-        throw new Error('Parsed VEQ contains no events');
-      }
-
-      if (VEQ) VEQ.load(parsedData);
-
-      this.originalVeqData = JSON.parse(JSON.stringify(parsedData));
-
-      this.transposeOffset = 0;
-      this.instruments.setTranspose(0);
-
-      this.setAutoplay(this.autoplay);
-
-      if (window.midiDiagnostics) {
-        const fileTr = parsedData.metadata?.transpose || 0;
-        window.midiDiagnostics.logSetting(
-          'fileLoaded',
-          `mc=real pitch. fileTranspose=${fileTr} (ignored). transposeOffset=0, globalTranspose=0`
-        );
-        window.midiDiagnostics.logTransposeState('after file load');
-      }
-
-      if (parsedData.metadata?.start !== undefined && !this.options.startTime) {
-        this.options.startTime = parsedData.metadata.start / 1000;
-        if (this.videoPlayer && this.videoPlayer.isReady) {
-          this.videoPlayer.seekTo(this.options.startTime);
-        } else {
-          this._pendingSeekTime = this.options.startTime;
-        }
-      }
-
-      if (this.pianoVisuals) {
-        this.pianoVisuals.updateLayout();
-        if (VEQ) this.pianoVisuals.loadVeq(VEQ.current);
-        if (
-          this.options.initialSettings &&
-          this.options.initialSettings.showPianoRoll !== false
-        ) {
-          this.pianoVisuals.show();
-        }
-      }
-      if (this.karaokeDisplay && VEQ) {
-        this.karaokeDisplay.loadVeq(VEQ.current);
-      }
-    } catch (e) {
-      this.synchronizer.unloadVEQ();
-      if (window.VideoEventScheduler) window.VideoEventScheduler.stopAndClearQueue();
-
+      if (window.VideoEventQueueClass) window.VideoEventQueueClass.clear();
       this.originalVeqData = null;
       this.transposeOffset = 0;
 
-      if (window.VideoEventQueueClass) window.VideoEventQueueClass.clear();
+      if (this.synchronizer) this.synchronizer.unloadVEQ();
+      if (window.VideoEventScheduler) window.VideoEventScheduler.stopAndClearQueue();
 
       if (this.pianoVisuals) {
         this.pianoVisuals.hide();
@@ -543,9 +414,135 @@ class GlowTunesPlayer {
       if (this.karaokeDisplay) {
         this.karaokeDisplay.loadVeq(null);
       }
-    }
-  }
 
+      const playerOptions = this._determinePlayerOptions(videoId);
+
+      this.videoPlayer?.destroy();
+      this.videoPlayer = null;
+
+      this.videoContainer.innerHTML = '';
+
+      if (this.options.startTime > 0) {
+        this._pendingSeekTime = this.options.startTime;
+      }
+
+      try {
+        this.videoPlayer = new VideoPlayer(
+          {
+            container: this.videoContainer,
+            ...playerOptions,
+            autoplay:
+              this.options.autoplay !== undefined ? this.options.autoplay : true,
+            controls:
+              this.options.controls !== undefined ? this.options.controls : true,
+            startTime: this.options.startTime,
+            endTime: this.options.endTime,
+          },
+          this.handlePlayerStateUpdate.bind(this)
+        );
+
+        if (
+          this.karaokeDisplay &&
+          this.karaokeDisplay.element &&
+          !this.karaokeDisplay.element.isConnected
+        ) {
+          this.notesContainer.appendChild(this.karaokeDisplay.element);
+        }
+
+        this.synchronizer.init(this.videoPlayer);
+      } catch (playerError) {
+        this.videoPlayer = null;
+        this.videoContainer.innerHTML =
+          '<p style="color: red; padding: 20px;">Error creating video player.</p>';
+        throw playerError;
+      }
+
+      try {
+        let veqText;
+        let finalVeqUrl = veqSourceUrl;
+
+        if (finalVeqUrl === 'SKIP') {
+          throw new Error('Skipping VEQ fetch (Globally Disabled)');
+        }
+
+        // Compute base path relative to current page so it works on GitHub Pages sub-directories
+        const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+
+        if (!finalVeqUrl) {
+          const cleanVideoId = (videoId || '').replace(/[^a-zA-Z0-9]/g, '');
+          finalVeqUrl = window.location.origin + basePath + `pianorolls/${cleanVideoId}.txt`;
+        } else if (finalVeqUrl.startsWith('/') && !finalVeqUrl.startsWith('//')) {
+          finalVeqUrl = window.location.origin + basePath + finalVeqUrl.substring(1);
+        } else if (!finalVeqUrl.startsWith('http')) {
+          finalVeqUrl = new URL(finalVeqUrl, window.location.href).href;
+        }
+
+        const response = await fetch(finalVeqUrl);
+        if (!response.ok) {
+          throw new Error(`VEQ not found (${response.status})`);
+        }
+        veqText = await response.text();
+
+        const VEQ = window.VideoEventQueueClass;
+        const parsedData = VEQ ? VEQ.parse(veqText) : null;
+
+        if (
+          !parsedData ||
+          !parsedData.timedEvents ||
+          parsedData.timedEvents.length === 0
+        ) {
+          throw new Error('Parsed VEQ contains no events');
+        }
+
+        if (VEQ) VEQ.load(parsedData);
+
+        this.originalVeqData = JSON.parse(JSON.stringify(parsedData));
+
+        this.transposeOffset = 0;
+        this.instruments.setTranspose(0);
+
+        this.setAutoplay(this.autoplay);
+
+        if (parsedData.metadata?.start !== undefined && !this.options.startTime) {
+          this.options.startTime = parsedData.metadata.start / 1000;
+          if (this.videoPlayer && this.videoPlayer.isReady) {
+            this.videoPlayer.seekTo(this.options.startTime);
+          } else {
+            this._pendingSeekTime = this.options.startTime;
+          }
+        }
+
+        if (this.pianoVisuals) {
+          this.pianoVisuals.updateLayout();
+          if (VEQ) this.pianoVisuals.loadVeq(VEQ.current);
+          if (
+            this.options.initialSettings &&
+            this.options.initialSettings.showPianoRoll !== false
+          ) {
+            this.pianoVisuals.show();
+          }
+        }
+        if (this.karaokeDisplay && VEQ) {
+          this.karaokeDisplay.loadVeq(VEQ.current);
+        }
+      } catch (e) {
+        this.synchronizer.unloadVEQ();
+        if (window.VideoEventScheduler) window.VideoEventScheduler.stopAndClearQueue();
+
+        this.originalVeqData = null;
+        this.transposeOffset = 0;
+
+        if (window.VideoEventQueueClass) window.VideoEventQueueClass.clear();
+
+        if (this.pianoVisuals) {
+          this.pianoVisuals.hide();
+          this.pianoVisuals.loadVeq(null);
+        }
+        if (this.karaokeDisplay) {
+          this.karaokeDisplay.loadVeq(null);
+        }
+      }
+    }
   constructor(videoContainer, notesContainer, options = {}) {
     this._state = {
       videoPlayer: null, synchronizer: null, instruments: null,

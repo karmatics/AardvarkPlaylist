@@ -79,19 +79,27 @@
   "styles": [
     "css/youTubePlayer.css"
   ],
-  "processedCountSinceCheckpoint": 12,
+  "processedCountSinceCheckpoint": 26,
   "changedMethods": {
     "css/youTubePlayer.css": "2026-09-08T01:46:09.467Z",
     "js/PlaybackController.js": "2026-09-08T01:46:09.467Z",
     "js/ui/SettingsDialogUI.js": "2026-09-08T01:46:09.467Z",
     "piano3d/Piano3DApp.js": "2026-09-08T01:46:09.467Z",
-    "js/CoopManager.js": "2026-09-08T02:01:37.251Z",
-    "js/YouTubePlayer.js": "2026-09-08T02:08:57.396Z",
+    "js/CoopManager.js": "2026-09-29T04:01:18.530Z",
+    "js/YouTubePlayer.js": "2026-09-29T03:56:44.177Z",
     "glowtunes/js/GlowTunesPlayer.js": "2026-09-09T03:57:37.965Z",
     "Luno/luno.json": "2026-09-19T00:14:03.596Z",
     "Luno/docs/LunoRuntimeStringifier.js": "2026-09-19T00:14:03.596Z",
     "Luno/core/LunoServer.js": "2026-09-19T00:14:03.596Z",
     "Library/LunoLoader.js": "2026-09-19T00:14:03.596Z",
-    "Luno/LunoPatchLog.html": "2026-09-19T00:14:37.595Z"
-  }
+    "Luno/LunoPatchLog.html": "2026-09-19T00:14:37.595Z",
+    "AardvarkExtension/install.html": "2026-09-29T03:28:09.450Z",
+    "js/ui/WelcomeDialogUI.js": "2026-10-04T05:09:20.229Z",
+    "AardvarkExtension/src/App.js": "2026-10-04T05:09:20.229Z",
+    "AardvarkExtension/config.js": "2026-09-29T04:01:18.530Z",
+    "AardvarkExtension/content/PlayerBridge.js": "2026-09-29T04:01:18.530Z",
+    "AardvarkExtension/manifest.json": "2026-09-29T04:01:18.530Z"
+  },
+  "lastCheckpointTime": "2026-09-28T06:14:21.560Z",
+  "pendingCheckpointDescription": "Clean working tree"
 }

@@ -1,18 +1,19 @@
 
 class PlaylistSelectorUI {
-  constructor(player) {
-    this.player = player;
-    this.presets = [
-      {
-        name: '🎹 Best of GlowTunes (Piano)',
-        url: '/playlists/pianoSongs.txt',
-      },
-      { name: "🎵 Rob's Mixtape", url: '/playlists/robsMixTape.txt' },
-      { name: '🧸 Kids Piano Songs', url: '/playlists/kidsPianoSongs.txt' },
-    ];
-    this.registeredSelects = [];
-  }
 
+  constructor(player) {
+      this.player = player;
+      // Use relative paths so GitHub Pages sub-directories resolve correctly
+      this.presets = [
+        {
+          name: '🎹 Best of GlowTunes (Piano)',
+          url: './playlists/pianoSongs.txt',
+        },
+        { name: "🎵 Rob's Mixtape", url: './playlists/robsMixTape.txt' },
+        { name: '🧸 Kids Piano Songs', url: './playlists/kidsPianoSongs.txt' },
+      ];
+      this.registeredSelects = [];
+    }
   getHistory() {
     try {
       return (

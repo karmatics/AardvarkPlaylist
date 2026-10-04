@@ -179,133 +179,129 @@ class FileIOManager {
     }
 
   async fetchAndLoadPlaylist(url, forcedAddType = null) {
-        let fetchUrl = url;
-        if (fetchUrl && !fetchUrl.includes('/') && !fetchUrl.includes('.')) {
-          fetchUrl = `/playlists/${fetchUrl}.txt`;
-        }
-
-        if (
-          fetchUrl.includes('.') &&
-          !fetchUrl.startsWith('http') &&
-          !fetchUrl.startsWith('/')
-        ) {
-          if (/^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(\/.*)?$/.test(fetchUrl)) {
-            fetchUrl = 'https://' + fetchUrl;
-          }
-        }
-
-        console.log(`Loading playlist from: ${fetchUrl}`);
-        try {
-          const res = await fetch(fetchUrl);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const text = await res.text();
-          let items = [];
-
-          try {
-            const data = JSON.parse(text);
-            const list = Array.isArray(data) ? data : data.playlist;
-            if (Array.isArray(list)) {
-              items = list.map((i) => ({
-                id: i.id,
-                title: i.title || i.id,
-                hasPianoRoll: i.hasPianoRoll,
-                songSettings: i.songSettings,
-                startTime: i.startTime,
-                endTime: i.endTime,
-              }));
-            }
-          } catch (e) {
-            const lines = text.split(/\r?\n/);
-            lines.forEach((l) => {
-              const parsed = PlaylistFormat.parseLine(l);
-              if (parsed) items.push(parsed);
-            });
-          }
-
-          if (items.length > 0) {
-            const finishLoad = (addType) => {
-              this.player.state.settings.lastPlaylistUrl = fetchUrl;
-              
-              // Prevent clear() and addBulk() from polluting DB on load
-              this.player.state.settings.playlistModified = false;
-              this.player._saveSettings();
-
-              this.player._isLoadingPlaylist = true;
-              if (addType === 'replace') {
-                this.player.playlistManager.clear();
-                this.player.playlistManager.addBulk(items, true);
-              } else if (addType === 'append') {
-                this.player.playlistManager.addBulk(items, true);
-              } else if (addType === 'prepend') {
-                this.player.playlistManager.addBulk(items, false);
-              }
-              this.player._isLoadingPlaylist = false;
-
-              this.player.setStatus(`Loaded ${items.length} videos.`, '#4f4');
-              if (this.player.playlistSelectorUI) {
-                this.player.playlistSelectorUI.markUnmodified(url);
-              }
-              if (this.player.leftPanel) this.player.leftPanel.open('playlist');
-            };
-
-            if (
-              forcedAddType === 'replace' ||
-              forcedAddType === 'append' ||
-              forcedAddType === 'prepend'
-            ) {
-              finishLoad(forcedAddType);
-              return true;
-            }
-
-            if (this.player.playlistManager.playlist.length > 0) {
-              UITools.makeDialog({
-                title: 'Load Playlist',
-                content: `Found ${items.length} videos in URL. How would you like to add them?`,
-                width: '350px',
-                appendTo: this.player.rootElement,
-                buttons: [
-                  {
-                    label: 'Replace',
-                    className: 'danger',
-                    onClick: (btn, dBox) => {
-                      finishLoad('replace');
-                      dBox.close();
-                    },
-                  },
-                  {
-                    label: 'Append (End)',
-                    className: 'primary',
-                    onClick: (btn, dBox) => {
-                      finishLoad('append');
-                      dBox.close();
-                    },
-                  },
-                  {
-                    label: 'Prepend (Start)',
-                    className: 'primary',
-                    onClick: (btn, dBox) => {
-                      finishLoad('prepend');
-                      dBox.close();
-                    },
-                  },
-                  { label: 'Cancel', onClick: (btn, dBox) => dBox.close() },
-                ],
-              });
-            } else {
-              finishLoad('replace');
-            }
-            return true;
-          } else {
-            this.player.setStatus('No videos found in URL.', '#fa0');
-            return false;
-          }
-        } catch (err) {
-          console.error('Playlist fetch error:', err);
-          this.player.setStatus(`Failed: ${err.message}`, '#f55');
-          return false;
-        }
+      let fetchUrl = url;
+      if (fetchUrl && !fetchUrl.includes('/') && !fetchUrl.includes('.')) {
+        fetchUrl = `playlists/${fetchUrl}.txt`;
       }
 
+      // Convert absolute domain-root paths (/playlists/...) to resolve relative to current app directory
+      if (fetchUrl && fetchUrl.startsWith('/') && !fetchUrl.startsWith('//')) {
+        const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+        fetchUrl = window.location.origin + basePath + fetchUrl.substring(1);
+      } else if (fetchUrl && !fetchUrl.startsWith('http')) {
+        // Resolve relative path against current page URL
+        fetchUrl = new URL(fetchUrl, window.location.href).href;
+      }
+
+      console.log(`Loading playlist from: ${fetchUrl}`);
+      try {
+        const res = await fetch(fetchUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        let items = [];
+
+        try {
+          const data = JSON.parse(text);
+          const list = Array.isArray(data) ? data : data.playlist;
+          if (Array.isArray(list)) {
+            items = list.map((i) => ({
+              id: i.id,
+              title: i.title || i.id,
+              hasPianoRoll: i.hasPianoRoll,
+              songSettings: i.songSettings,
+              startTime: i.startTime,
+              endTime: i.endTime,
+            }));
+          }
+        } catch (e) {
+          const lines = text.split(/\r?\n/);
+          lines.forEach((l) => {
+            const parsed = PlaylistFormat.parseLine(l);
+            if (parsed) items.push(parsed);
+          });
+        }
+
+        if (items.length > 0) {
+          const finishLoad = (addType) => {
+            this.player.state.settings.lastPlaylistUrl = url;
+            this.player.state.settings.playlistModified = false;
+            this.player._saveSettings();
+
+            this.player._isLoadingPlaylist = true;
+            if (addType === 'replace') {
+              this.player.playlistManager.clear();
+              this.player.playlistManager.addBulk(items, true);
+            } else if (addType === 'append') {
+              this.player.playlistManager.addBulk(items, true);
+            } else if (addType === 'prepend') {
+              this.player.playlistManager.addBulk(items, false);
+            }
+            this.player._isLoadingPlaylist = false;
+
+            this.player.setStatus(`Loaded ${items.length} videos.`, '#4f4');
+            if (this.player.playlistSelectorUI) {
+              this.player.playlistSelectorUI.markUnmodified(url);
+            }
+            if (this.player.leftPanel) this.player.leftPanel.open('playlist');
+          };
+
+          if (
+            forcedAddType === 'replace' ||
+            forcedAddType === 'append' ||
+            forcedAddType === 'prepend'
+          ) {
+            finishLoad(forcedAddType);
+            return true;
+          }
+
+          if (this.player.playlistManager.playlist.length > 0) {
+            UITools.makeDialog({
+              title: 'Load Playlist',
+              content: `Found ${items.length} videos in URL. How would you like to add them?`,
+              width: '350px',
+              appendTo: this.player.rootElement,
+              buttons: [
+                {
+                  label: 'Replace',
+                  className: 'danger',
+                  onClick: (btn, dBox) => {
+                    finishLoad('replace');
+                    dBox.close();
+                  },
+                },
+                {
+                  label: 'Append (End)',
+                  className: 'primary',
+                  onClick: (btn, dBox) => {
+                    finishLoad('append');
+                    dBox.close();
+                  },
+                },
+                {
+                  label: 'Prepend (Start)',
+                  className: 'primary',
+                  onClick: (btn, dBox) => {
+                    finishLoad('prepend');
+                    dBox.close();
+                  },
+                },
+                { label: 'Cancel', onClick: (btn, dBox) => dBox.close() },
+              ],
+            });
+          } else {
+            finishLoad('replace');
+          }
+          return true;
+        } else {
+          this.player.setStatus('No videos found in URL.', '#fa0');
+          return false;
+        }
+      } catch (err) {
+        console.error('Playlist fetch error:', err);
+        this.player.setStatus(`Failed: ${err.message}`, '#f55');
+        return false;
+      }
+    }
   async savePlaylistToCloud() {
     if (
       !this.player.playlistManager ||

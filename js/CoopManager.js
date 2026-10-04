@@ -9,52 +9,91 @@ class CoopManager {
     }
 
   setupComms() {
-    window.addEventListener('message', (e) => this.handleMessage(e));
+      window.addEventListener('message', (e) => this.handleMessage(e));
 
-    this.sendMessage('PLAYER_READY');
-    this.sendSync();
+      // Announce player readiness immediately
+      this.sendMessage('PLAYER_READY');
+      this.sendSync();
 
-    this._handshakeInterval = setInterval(() => {
-      this.sendMessage('HANDSHAKE', {
-        playlistHash: this.computePlaylistHash(),
-      });
-    }, 5000);
-  }
+      // Standard heartbeat
+      if (this._handshakeInterval) clearInterval(this._handshakeInterval);
+      this._handshakeInterval = setInterval(() => {
+        this.sendMessage('PLAYER_READY');
+        this.sendMessage('HANDSHAKE', {
+          playlistHash: this.computePlaylistHash(),
+        });
+      }, 4000);
+    }
 
   handleMessage(event) {
-        if (!event.data || !event.data.type) return;
-        let { type, ...payload } = event.data;
+      if (!event.data) return;
 
-        // Handle the Aardvark Chrome Extension protocol bridge wrapper (YT_BRIDGE_TO_PAGE)
-        if (type === 'YT_BRIDGE_TO_PAGE' && event.data.payload) {
-          type = event.data.payload.type;
-          payload = event.data.payload;
-        }
-
-        // Defer processing if the initial playlist or playlistManager has not loaded yet
-        if (!this.player._isPlaylistLoaded || !this.player.playlistManager) {
-          if (!this._pendingIncomingCommands) this._pendingIncomingCommands = [];
-          this._pendingIncomingCommands.push({ type: type, ...payload });
-          console.log(`[Bridge] Deferring message type ${type} until playlist and playlistManager are fully loaded.`);
+      let data = event.data;
+      if (typeof data === 'string') {
+        try {
+          data = JSON.parse(data);
+        } catch (e) {
           return;
         }
+      }
 
-        switch (type) {
-          case 'ADD_VIDEO':
-            this.handleRemoteAdd(payload);
-            break;
-          case 'PLAY_NOW':
-            this.handleRemotePlay(payload);
-            break;
-          case 'FULL_SYNC_REQUEST':
-            this.sendSync();
-            break;
-          case 'BRIDGE_HEARTBEAT':
-            // Respond to content script heartbeat so it marks the connection as alive
-            this.sendMessage('PLAYER_READY', { sessionId: payload.sessionId || null });
-            break;
+      if (!data || typeof data !== 'object') return;
+
+      // Ignore messages echoed by this tab
+      if (data.sender === 'AardvarkPlayerApp') return;
+
+      let type = data.type;
+      let payload = data;
+
+      // Safely unwrap any depth of extension bridge packaging
+      while (type === 'YT_BRIDGE_TO_PAGE' && payload && payload.payload) {
+        payload = payload.payload;
+        type = payload.type;
+      }
+
+      if (!type) return;
+
+      if (payload && payload.sessionId) {
+        this.lastSessionId = payload.sessionId;
+      }
+
+      // Immediately answer handshake and ping probes
+      if (
+        type === 'BRIDGE_HEARTBEAT' ||
+        type === 'PING_BRIDGE' ||
+        type === 'PING' ||
+        type === 'PING_PAGE' ||
+        type === 'CHECK_READY' ||
+        type === 'QUERY_READY'
+      ) {
+        this.sendMessage('PLAYER_READY', { sessionId: this.lastSessionId });
+        if (payload && payload.msgId) {
+          this.sendMessage('APP_ACK', { msgId: payload.msgId });
         }
-  }
+        return;
+      }
+
+      if (type === 'FULL_SYNC_REQUEST') {
+        this.sendSync();
+        return;
+      }
+
+      if (type === 'ADD_VIDEO') {
+        this.handleRemoteAdd(payload);
+        if (payload && payload.msgId) {
+          this.sendMessage('APP_ACK', { msgId: payload.msgId });
+        }
+        return;
+      }
+
+      if (type === 'PLAY_NOW') {
+        this.handleRemotePlay(payload);
+        if (payload && payload.msgId) {
+          this.sendMessage('APP_ACK', { msgId: payload.msgId });
+        }
+        return;
+      }
+    }
   handleRemoteAdd(payload) {
       this._handleIncomingVideo(payload);
     }
@@ -64,10 +103,23 @@ class CoopManager {
     }
 
   sendMessage(type, payload = {}) {
-    const fullMessage = { type, ...payload };
-    window.postMessage(fullMessage, '*');
-  }
+      const fullMessage = { type, sender: 'AardvarkPlayerApp', ...payload };
+      const wrappedMessage = {
+        type: 'PAGE_TO_YT_BRIDGE',
+        sender: 'AardvarkPlayerApp',
+        payload: fullMessage
+      };
 
+      // 1. Post to current window context
+      window.postMessage(fullMessage, '*');
+      window.postMessage(wrappedMessage, '*');
+
+      // 2. Post to top/parent frame if embedded
+      if (window.top && window.top !== window) {
+        try { window.top.postMessage(fullMessage, '*'); } catch (e) {}
+        try { window.top.postMessage(wrappedMessage, '*'); } catch (e) {}
+      }
+    }
   sendSync() {
     if (!this.player.playlistManager) return;
     const list = this.player.playlistManager.playlist.map((v) => ({
@@ -234,10 +286,8 @@ class CoopManager {
     this.sendMessage('SYNC_PLAYLIST', { playlist: list });
   }
 
-
   flushPendingIncomingCommands() {
       if (this._pendingIncomingCommands && this._pendingIncomingCommands.length > 0) {
-        console.log(`[Bridge] Flushing ${this._pendingIncomingCommands.length} deferred incoming commands.`);
         const cmds = this._pendingIncomingCommands;
         this._pendingIncomingCommands = [];
         cmds.forEach(cmd => {
@@ -255,8 +305,8 @@ class CoopManager {
           }
         });
       }
+      this.sendPlayerReady();
     }
-
   _handleIncomingVideo(payload) {
       const vId = payload.videoId;
       if (!vId) return;
@@ -374,6 +424,16 @@ class CoopManager {
       } catch (e) {
         console.warn('[Bridge] Could not pause some external videos due to cross-origin restrictions:', e);
       }
+    }
+
+  sendPlayerReady(sessionId) {
+      if (sessionId) this.lastSessionId = sessionId;
+      const payload = {
+        sessionId: this.lastSessionId || null,
+        ready: true,
+        timestamp: Date.now()
+      };
+      this.sendMessage('PLAYER_READY', payload);
     }
 }
 

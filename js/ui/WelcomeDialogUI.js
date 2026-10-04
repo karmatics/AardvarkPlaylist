@@ -27,7 +27,7 @@ class WelcomeDialogUI {
       if (/Edg\//.test(ua)) browser = 'Edge';
       else if (/Firefox\//.test(ua)) browser = 'Firefox';
       else if (/Chrome\//.test(ua) && /Google Inc/.test(vendor)) browser = 'Chrome';
-      else if (/Brave/i.test(navigator.userAgent) || navigator.brave) browser = 'Chrome';
+      else if (/Brave/i.test(navigator.userAgent) || navigator.brave) browser = 'Brave';
 
       const ICON_BASE = './assets/icons/';
       const AARDVARK_ICON = ICON_BASE + 'vark.png';
@@ -35,6 +35,7 @@ class WelcomeDialogUI {
         Chrome: ICON_BASE + 'chrome.png',
         Firefox: ICON_BASE + 'firefox.png',
         Edge: ICON_BASE + 'edge.png',
+        Brave: ICON_BASE + 'chrome.png',
       };
 
       const wrapper = makeElement('div', {
@@ -128,11 +129,9 @@ class WelcomeDialogUI {
         makeElement('span', {}, `Get the Browser Companion Extension (${browser})`)
       );
       extBtn.onclick = () => {
-        // Robust resolution that works seamlessly on localhost and karmatics.github.io
-        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const targetRel = isLocal ? '/AardvarkExtension/install.html' : '../AardvarkExtension/install.html';
-        const resolvedUrl = new URL(targetRel + '?browser=' + encodeURIComponent(browser), window.location.href).href;
-        window.open(resolvedUrl, '_blank');
+        const origin = window.location.origin;
+        const targetUrl = `${origin}/AardvarkExtension/index.html?browser=${encodeURIComponent(browser)}`;
+        window.open(targetUrl, '_blank');
       };
       heroRight.appendChild(extBtn);
 
@@ -288,7 +287,7 @@ class WelcomeDialogUI {
         !this.player.state.settings.lastPlaylistUrl &&
         !this.player.state.settings.playlistModified
       ) {
-        this.player._fetchAndLoadPlaylist('/playlists/pianoSongs.txt', 'replace');
+        this.player._fetchAndLoadPlaylist('./playlists/pianoSongs.txt', 'replace');
       }
     }
 }

@@ -19,34 +19,31 @@ class YouTubePlayer {
     return player;
   }
 
-  
-
   constructor() {
-      this.gt = null;
-      this.playlistManager = null;
-      this.videoDialog = null;
-      this.stateManager = new AppStateManager(this);
-      this.fileIOManager = new FileIOManager(this);
-      this.coopManager = new CoopManager(this);
-      this.midiInputManager = new MidiInputManager(this);
-      this.keyboardEditController = new KeyboardEditController(this);
-      this.settingsDialogUI = new SettingsDialogUI(this);
-      this.viewportManager = new ViewportManager(this);
-      this.playbackController = new PlaybackController(this);
-      this.advancedToolsUI = new AdvancedToolsUI(this);
-      this.playlistSelectorUI = new PlaylistSelectorUI(this);
-      this.welcomeDialogUI = new WelcomeDialogUI(this);
-      this.state = this.stateManager.loadState();
-      this.basePath = './glowtunes/';
+        this.gt = null;
+        this.playlistManager = null;
+        this.videoDialog = null;
+        this.stateManager = new AppStateManager(this);
+        this.fileIOManager = new FileIOManager(this);
+        this.coopManager = new CoopManager(this);
+        this.midiInputManager = new MidiInputManager(this);
+        this.keyboardEditController = new KeyboardEditController(this);
+        this.settingsDialogUI = new SettingsDialogUI(this);
+        this.viewportManager = new ViewportManager(this);
+        this.playbackController = new PlaybackController(this);
+        this.advancedToolsUI = new AdvancedToolsUI(this);
+        this.playlistSelectorUI = new PlaylistSelectorUI(this);
+        this.welcomeDialogUI = new WelcomeDialogUI(this);
+        this.state = this.stateManager.loadState();
+        this.basePath = './glowtunes/';
 
-      // Playback Logic State
-      this.activeSegments = null; // Array of {start, end}
-      this.currentSegmentIndex = -1;
-      
-      // Track load state to avoid race conditions with incoming commands
-      this._isPlaylistLoaded = false;
-    }
+        // Playback Logic State
+        this.activeSegments = null;
+        this.currentSegmentIndex = -1;
 
+        // Initialized synchronously so extension commands are never blocked
+        this._isPlaylistLoaded = true;
+      }
   _buildLeftPanel() {
     this.leftPanelUI = new LeftPanelUI(this);
     this.leftPanelUI.build();
@@ -477,211 +474,216 @@ class YouTubePlayer {
     }
 
   init(targetElement) {
-        this.rootElement = targetElement || document.body;
-        window.player = this;
-        window.projectApp = this;
+          this.rootElement = targetElement || document.body;
+          window.player = this;
+          window.projectApp = this;
 
-        this.DialogBoxClass = typeof UITools !== 'undefined' ? UITools : null;
+          this.DialogBoxClass = typeof UITools !== 'undefined' ? UITools : null;
 
-        window.smartLog = (cat, msg, data) => SmartLogger.log(cat, msg, data);
-        this._injectStyles();
-        this.pianoLogic = new PianoRollController(this);
-        this.headerControlsUI = new HeaderControlsUI(this);
+          window.smartLog = (cat, msg, data) => SmartLogger.log(cat, msg, data);
+          this._injectStyles();
+          this.pianoLogic = new PianoRollController(this);
+          this.headerControlsUI = new HeaderControlsUI(this);
 
-        this.leftPanel = new SidePanel('left', 360, this.env);
+          this.leftPanel = new SidePanel('left', 360, this.env);
 
-        this._buildLeftPanel();
+          this._buildLeftPanel();
 
-        GlowTunesKeys.initialize(this);
-        this._setupGlobalSyncKeys();
+          GlowTunesKeys.initialize(this);
+          this._setupGlobalSyncKeys();
 
-        this._setupComms();
-        this._setupMidi();
+          this._setupComms();
+          this._setupMidi();
 
-        this._createFloatingMenuButton();
+          this._createFloatingMenuButton();
 
-        this.curatorDiagnosticsUI = new CuratorDiagnosticsUI(this);
-        window.openCuratorDiagnostics = () => {
-          this.curatorDiagnosticsUI.open();
-        };
+          this.curatorDiagnosticsUI = new CuratorDiagnosticsUI(this);
+          window.openCuratorDiagnostics = () => {
+            this.curatorDiagnosticsUI.open();
+          };
 
-        window.toggleSmartAutoArp = (enable) => {
-          this.state.settings.smartAutoArp = !!enable;
-          this._saveSettings();
-          console.log(`[SmartArp] smartAutoArp is now: ${!!enable}`);
-          if (this.smartArpDiagnosticsUI) this.smartArpDiagnosticsUI.refresh();
-        };
-
-        window.toggleSmartAutoArpViewport = (enable) => {
-          this.state.settings.smartAutoArpVerbose = !!enable;
-          this._saveSettings();
-          console.log(`[SmartArp] smartAutoArpVerbose is now: ${!!enable}`);
-          if (this.smartArpDiagnosticsUI) this.smartArpDiagnosticsUI.refresh();
-        };
-
-        window.clearPlaylistSettings = () => {
-          if (this.playlistManager && this.playlistManager.playlist) {
-            this.playlistManager.playlist.forEach(item => {
-              delete item.songSettings;
-              delete item.startTime;
-              delete item.endTime;
-            });
-            this.playlistManager.renderItems();
-            this._saveState();
-            this._sendSync();
-            console.log("[SmartArp] Cleared custom song settings, start times, and end times for all playlist items in memory.");
+          window.toggleSmartAutoArp = (enable) => {
+            this.state.settings.smartAutoArp = !!enable;
+            this._saveSettings();
+            console.log(`[SmartArp] smartAutoArp is now: ${!!enable}`);
             if (this.smartArpDiagnosticsUI) this.smartArpDiagnosticsUI.refresh();
-          }
-        };
+          };
 
-        window.openSmartArpDiagnostics = () => {
-          if (!this.smartArpDiagnosticsUI) {
-            this.smartArpDiagnosticsUI = new SmartArpDiagnosticsUI(this);
-          }
-          this.smartArpDiagnosticsUI.open();
-        };
+          window.toggleSmartAutoArpViewport = (enable) => {
+            this.state.settings.smartAutoArpVerbose = !!enable;
+            this._saveSettings();
+            console.log(`[SmartArp] smartAutoArpVerbose is now: ${!!enable}`);
+            if (this.smartArpDiagnosticsUI) this.smartArpDiagnosticsUI.refresh();
+          };
 
-        window.addEventListener('webgl-context-restored', () => {
-          this.setStatus('Graphics memory reset. Restoring 3D Piano...', '#fa0');
-          const currentMode = this.state.settings.keyboardStyle || '3d';
-          this.setDisplayMode('2d');
-          setTimeout(() => {
-            this.setDisplayMode(currentMode);
-            this.setStatus('3D Piano Restored.', '#4f4');
-          }, 1000);
-        });
-
-        window.addEventListener('panel-toggle-complete', () => {
-          this._scheduleLayoutRefresh('panel-toggle-complete');
-        });
-
-        window.addEventListener('layout-safe-area-change', (e) => {
-          this._scheduleLayoutRefresh('layout-safe-area-change');
-        });
-
-        window.addEventListener('resize', () => {
-          SidePanel.updateGlobalSafeArea();
-          this._scheduleLayoutRefresh('window.resize');
-        });
-        SidePanel.updateGlobalSafeArea();
-
-        const update3DInteraction = (e) => {
-          const cvs = document.getElementById('canvas-container');
-          if (!cvs || cvs.style.display === 'none') return;
-
-          const modDown = e.metaKey || e.ctrlKey || e.altKey || e.shiftKey;
-          const isOrbiting = this.piano3DApp && this.piano3DApp.orbitModeActive;
-
-          if (modDown || isOrbiting) {
-            if (cvs.style.pointerEvents !== 'auto')
-              cvs.style.pointerEvents = 'auto';
-          } else {
-            if (cvs.style.pointerEvents !== 'none')
-              cvs.style.pointerEvents = 'none';
-          }
-        };
-
-        window.addEventListener('keydown', update3DInteraction, true);
-        window.addEventListener('keyup', update3DInteraction, true);
-        window.addEventListener('mousemove', update3DInteraction, true);
-        window.addEventListener('mousedown', update3DInteraction, true);
-        window.addEventListener('wheel', update3DInteraction, true);
-
-        window.addEventListener('blur', () => {
-          const cvs = document.getElementById('canvas-container');
-          if (cvs) cvs.style.pointerEvents = 'none';
-        });
-
-        window.addEventListener(
-          'wheel',
-          (e) => {
-            if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
-
-            if (this.piano3DApp && this.piano3DApp.orbitModeActive) return;
-
-            if (e.target && e.target.closest) {
-              if (
-                e.target.closest('.yt-side-panel') ||
-                e.target.closest('.yt-pill-ctrl')
-              )
-                return;
-
-              const dialog = e.target.closest('.uw-dialog');
-              if (dialog) {
-                const titleEl = dialog.querySelector('.uw-title');
-                if (titleEl && !titleEl.textContent.startsWith('Video:')) {
-                  return;
-                }
-              }
-            }
-
-            if (this.gt && this.gt.videoPlayer && this.gt.videoPlayer.isReady) {
-              e.preventDefault();
-              let vol = this.gt.videoPlayer.getVolume();
-              vol += e.deltaY < 0 ? 5 : -5;
-              vol = Math.max(0, Math.min(100, vol));
-              this.state.settings.videoVolume = vol;
+          window.clearPlaylistSettings = () => {
+            if (this.playlistManager && this.playlistManager.playlist) {
+              this.playlistManager.playlist.forEach(item => {
+                delete item.songSettings;
+                delete item.startTime;
+                delete item.endTime;
+              });
+              this.playlistManager.renderItems();
               this._saveState();
-              this.setStatus(`Volume: ${Math.round(vol)}%`, '#4f4');
-              if (this.leftPanelUI) this.leftPanelUI.refreshAudioUI();
+              this._sendSync();
+              console.log("[SmartArp] Cleared custom song settings, start times, and end times for all playlist items in memory.");
+              if (this.smartArpDiagnosticsUI) this.smartArpDiagnosticsUI.refresh();
             }
-          },
-          { passive: false, capture: true }
-        );
+          };
 
-        document.addEventListener('fullscreenchange', () => {
-          if (!document.fullscreenElement) {
-            document.body.classList.remove('fullscreen-mode');
-            this.viewportManager.destroyFullscreenToolbar();
-          } else {
-            document.body.classList.add('fullscreen-mode');
-          }
-          SidePanel.updateGlobalSafeArea();
-          this._scheduleLayoutRefresh('fullscreenchange');
-          setTimeout(() => {
-            if (document.fullscreenElement) {
-              this.viewportManager.createFullscreenToolbar();
+          window.openSmartArpDiagnostics = () => {
+            if (!this.smartArpDiagnosticsUI) {
+              this.smartArpDiagnosticsUI = new SmartArpDiagnosticsUI(this);
             }
-          }, 600);
-        });
+            this.smartArpDiagnosticsUI.open();
+          };
 
-        setTimeout(() => {
-          this._processUrlParameters();
-
-          this.stateManager.loadPlaylistAsync().then((playlistData) => {
-            if (playlistData && this.playlistManager) {
-              this.playlistManager.load(playlistData);
-              this.state.playlistData = playlistData;
-              if (this.playlistManager.playlist.length > 0) {
-                if (!this.leftPanel.isOpen) {
-                  this.leftPanel.open('playlist');
-                  this._updateDockUI();
-                }
-              }
-            } else if (!this.videoDialog) {
-              if (!this.leftPanel.isOpen) {
-                this.leftPanel.open('playlist');
-              }
-            }
-
-            this._isPlaylistLoaded = true;
-            if (this.coopManager && typeof this.coopManager.flushPendingIncomingCommands === 'function') {
-              this.coopManager.flushPendingIncomingCommands();
-            }
+          window.addEventListener('webgl-context-restored', () => {
+            this.setStatus('Graphics memory reset. Restoring 3D Piano...', '#fa0');
+            const currentMode = this.state.settings.keyboardStyle || '3d';
+            this.setDisplayMode('2d');
+            setTimeout(() => {
+              this.setDisplayMode(currentMode);
+              this.setStatus('3D Piano Restored.', '#4f4');
+            }, 1000);
           });
 
-          if (!localStorage.getItem('aardvark_welcome_shown_v1')) {
-            localStorage.setItem('aardvark_welcome_shown_v1', 'true');
-            this._showWelcomeDialog();
-          }
+          window.addEventListener('panel-toggle-complete', () => {
+            this._scheduleLayoutRefresh('panel-toggle-complete');
+          });
 
-          if (localStorage.getItem('gt_smart_arp_diag_open') === 'true') {
-            window.openSmartArpDiagnostics();
-          }
-        }, 500);
+          window.addEventListener('layout-safe-area-change', (e) => {
+            this._scheduleLayoutRefresh('layout-safe-area-change');
+          });
 
-        return this;
-  }
+          window.addEventListener('resize', () => {
+            SidePanel.updateGlobalSafeArea();
+            this._scheduleLayoutRefresh('window.resize');
+          });
+          SidePanel.updateGlobalSafeArea();
+
+          const update3DInteraction = (e) => {
+            const cvs = document.getElementById('canvas-container');
+            if (!cvs || cvs.style.display === 'none') return;
+
+            const modDown = e.metaKey || e.ctrlKey || e.altKey || e.shiftKey;
+            const isOrbiting = this.piano3DApp && this.piano3DApp.orbitModeActive;
+
+            if (modDown || isOrbiting) {
+              if (cvs.style.pointerEvents !== 'auto')
+                cvs.style.pointerEvents = 'auto';
+            } else {
+              if (cvs.style.pointerEvents !== 'none')
+                cvs.style.pointerEvents = 'none';
+            }
+          };
+
+          window.addEventListener('keydown', update3DInteraction, true);
+          window.addEventListener('keyup', update3DInteraction, true);
+          window.addEventListener('mousemove', update3DInteraction, true);
+          window.addEventListener('mousedown', update3DInteraction, true);
+          window.addEventListener('wheel', update3DInteraction, true);
+
+          window.addEventListener('blur', () => {
+            const cvs = document.getElementById('canvas-container');
+            if (cvs) cvs.style.pointerEvents = 'none';
+          });
+
+          window.addEventListener(
+            'wheel',
+            (e) => {
+              if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+
+              if (this.piano3DApp && this.piano3DApp.orbitModeActive) return;
+
+              if (e.target && e.target.closest) {
+                if (
+                  e.target.closest('.yt-side-panel') ||
+                  e.target.closest('.yt-pill-ctrl')
+                )
+                  return;
+
+                const dialog = e.target.closest('.uw-dialog');
+                if (dialog) {
+                  const titleEl = dialog.querySelector('.uw-title');
+                  if (titleEl && !titleEl.textContent.startsWith('Video:')) {
+                    return;
+                  }
+                }
+              }
+
+              if (this.gt && this.gt.videoPlayer && this.gt.videoPlayer.isReady) {
+                e.preventDefault();
+                let vol = this.gt.videoPlayer.getVolume();
+                vol += e.deltaY < 0 ? 5 : -5;
+                vol = Math.max(0, Math.min(100, vol));
+                this.state.settings.videoVolume = vol;
+                this._saveState();
+                this.setStatus(`Volume: ${Math.round(vol)}%`, '#4f4');
+                if (this.leftPanelUI) this.leftPanelUI.refreshAudioUI();
+              }
+            },
+            { passive: false, capture: true }
+          );
+
+          document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement) {
+              document.body.classList.remove('fullscreen-mode');
+              this.viewportManager.destroyFullscreenToolbar();
+            } else {
+              document.body.classList.add('fullscreen-mode');
+            }
+            SidePanel.updateGlobalSafeArea();
+            this._scheduleLayoutRefresh('fullscreenchange');
+            setTimeout(() => {
+              if (document.fullscreenElement) {
+                this.viewportManager.createFullscreenToolbar();
+              }
+            }, 600);
+          });
+
+          setTimeout(() => {
+            this._processUrlParameters();
+
+            this.stateManager.loadPlaylistAsync().then((playlistData) => {
+              if (playlistData && this.playlistManager) {
+                this.playlistManager.load(playlistData);
+                this.state.playlistData = playlistData;
+                if (this.playlistManager.playlist.length > 0) {
+                  if (!this.leftPanel.isOpen) {
+                    this.leftPanel.open('playlist');
+                    this._updateDockUI();
+                  }
+                }
+              } else if (!this.videoDialog) {
+                if (!this.leftPanel.isOpen) {
+                  this.leftPanel.open('playlist');
+                }
+              }
+
+              this._isPlaylistLoaded = true;
+              if (this.coopManager) {
+                if (typeof this.coopManager.flushPendingIncomingCommands === 'function') {
+                  this.coopManager.flushPendingIncomingCommands();
+                }
+                if (typeof this.coopManager.sendPlayerReady === 'function') {
+                  this.coopManager.sendPlayerReady();
+                }
+              }
+            });
+
+            if (!localStorage.getItem('aardvark_welcome_shown_v1')) {
+              localStorage.setItem('aardvark_welcome_shown_v1', 'true');
+              this._showWelcomeDialog();
+            }
+
+            if (localStorage.getItem('gt_smart_arp_diag_open') === 'true') {
+              window.openSmartArpDiagnostics();
+            }
+          }, 500);
+
+          return this;
+    }
   async run(env) {
       if (this.rootElement) {
         this.destroy();
