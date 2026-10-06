@@ -1104,23 +1104,21 @@ class VideoEventQueue {
   }
 
   static getExportFilename() {
-    const veq = this.current || {};
-    const meta = veq.metadata || {};
-    // Prefer videoId (stripped of non-alphanumerics), then name, then fallback.
-    if (veq.videoId) {
-      const clean = String(veq.videoId).replace(/[^a-zA-Z0-9]/g, '');
-      if (clean.length > 0) return `${clean}.txt`;
+      const veq = this.current || {};
+      const meta = veq.metadata || {};
+      if (veq.videoId) {
+        const clean = String(veq.videoId).replace(/[^a-zA-Z0-9_-]/g, '');
+        if (clean.length > 0) return `${clean}.txt`;
+      }
+      if (meta.name || veq.name) {
+        const clean = (meta.name || veq.name)
+          .replace(/[^a-zA-Z0-9 _-]/g, '')
+          .trim()
+          .replace(/\s+/g, '_');
+        if (clean.length > 0) return `${clean}.txt`;
+      }
+      return 'pianoroll.txt';
     }
-    if (meta.name || veq.name) {
-      const clean = (meta.name || veq.name)
-        .replace(/[^a-zA-Z0-9 _-]/g, '')
-        .trim()
-        .replace(/\s+/g, '_');
-      if (clean.length > 0) return `${clean}.txt`;
-    }
-    return 'pianoroll.txt';
-  }
-
   static insertMarker(timeMs) {
     this.pushUndoState();
     const event = {type: 'marker', t: timeMs, label: ''};

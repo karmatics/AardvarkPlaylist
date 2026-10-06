@@ -347,82 +347,81 @@ class AdvancedToolsUI {
     }
 
   async savePianoRollToFolder() {
-    if (!window.VideoEventQueueClass) return;
-    const veq = window.VideoEventQueueClass.current;
-    if (!veq || !veq.timedEvents || veq.timedEvents.length === 0) {
-      this.player.setStatus("No piano roll to save.", "#fa0");
-      return;
-    }
-
-    const transposeOffset = this.player?.gt?.transposeOffset || 0;
-    const text = window.VideoEventQueueClass.serialize(transposeOffset);
-
-    let baseName = "";
-    const item = this.player.currentPlayItem;
-    if (item && item.id) {
-      baseName = String(item.id).replace(/[^a-zA-Z0-9]/g, "");
-    }
-    if (!baseName && veq.videoId) {
-      baseName = String(veq.videoId).replace(/[^a-zA-Z0-9]/g, "");
-    }
-    if (!baseName && veq.metadata?.name) {
-      baseName = String(veq.metadata.name)
-        .replace(/[^a-zA-Z0-9 _-]/g, "")
-        .trim()
-        .replace(/\s+/g, "_");
-    }
-    if (!baseName) baseName = "pianoroll_" + Date.now();
-    const filename = baseName + ".txt";
-
-    if (window.showDirectoryPicker) {
-      try {
-        if (!window._pianorollFolderHandle) {
-          this.player.setStatus(
-            "Pick your pianorolls folder (once per session)...",
-            "#4a90e2"
-          );
-          window._pianorollFolderHandle = await window.showDirectoryPicker({
-            mode: "readwrite",
-          });
-        }
-        const dirHandle = window._pianorollFolderHandle;
-
-        const perm = await dirHandle.queryPermission({ mode: "readwrite" });
-        if (perm !== "granted") {
-          const req = await dirHandle.requestPermission({ mode: "readwrite" });
-          if (req !== "granted") {
-            throw new Error("Permission denied for folder.");
-          }
-        }
-
-        const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
-        const writable = await fileHandle.createWritable();
-        await writable.write(text);
-        await writable.close();
-
-        this.player.setStatus(`Saved ${filename} to pianorolls folder.`, "#4f4");
+      if (!window.VideoEventQueueClass) return;
+      const veq = window.VideoEventQueueClass.current;
+      if (!veq || !veq.timedEvents || veq.timedEvents.length === 0) {
+        this.player.setStatus("No piano roll to save.", "#fa0");
         return;
-      } catch (e) {
-        window._pianorollFolderHandle = null;
-        console.warn("[AdvancedToolsUI] Folder save failed, falling back:", e);
       }
+
+      const transposeOffset = this.player?.gt?.transposeOffset || 0;
+      const text = window.VideoEventQueueClass.serialize(transposeOffset);
+
+      let baseName = "";
+      const item = this.player.currentPlayItem;
+      if (item && item.id) {
+        baseName = String(item.id).replace(/[^a-zA-Z0-9_-]/g, "");
+      }
+      if (!baseName && veq.videoId) {
+        baseName = String(veq.videoId).replace(/[^a-zA-Z0-9_-]/g, "");
+      }
+      if (!baseName && veq.metadata?.name) {
+        baseName = String(veq.metadata.name)
+          .replace(/[^a-zA-Z0-9 _-]/g, "")
+          .trim()
+          .replace(/\s+/g, "_");
+      }
+      if (!baseName) baseName = "pianoroll_" + Date.now();
+      const filename = baseName + ".txt";
+
+      if (window.showDirectoryPicker) {
+        try {
+          if (!window._pianorollFolderHandle) {
+            this.player.setStatus(
+              "Pick your pianorolls folder (once per session)...",
+              "#4a90e2"
+            );
+            window._pianorollFolderHandle = await window.showDirectoryPicker({
+              mode: "readwrite",
+            });
+          }
+          const dirHandle = window._pianorollFolderHandle;
+
+          const perm = await dirHandle.queryPermission({ mode: "readwrite" });
+          if (perm !== "granted") {
+            const req = await dirHandle.requestPermission({ mode: "readwrite" });
+            if (req !== "granted") {
+              throw new Error("Permission denied for folder.");
+            }
+          }
+
+          const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+          const writable = await fileHandle.createWritable();
+          await writable.write(text);
+          await writable.close();
+
+          this.player.setStatus(`Saved ${filename} to pianorolls folder.`, "#4f4");
+          return;
+        } catch (e) {
+          window._pianorollFolderHandle = null;
+          console.warn("[AdvancedToolsUI] Folder save failed, falling back:", e);
+        }
+      }
+
+      const blob = new Blob([text], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      this.player.setStatus(
+        `Downloaded ${filename} (browser does not support folder save).`,
+        "#fa0"
+      );
     }
-
-    const blob = new Blob([text], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    this.player.setStatus(
-      `Downloaded ${filename} (browser does not support folder save).`,
-      "#fa0"
-    );
-  }
-
   buildDialog() {
       if (this.dialog) {
         this.dialog.close?.();
