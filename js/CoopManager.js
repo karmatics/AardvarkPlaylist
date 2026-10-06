@@ -26,74 +26,73 @@ class CoopManager {
     }
 
   handleMessage(event) {
-      if (!event.data) return;
+        if (!event.data) return;
 
-      let data = event.data;
-      if (typeof data === 'string') {
-        try {
-          data = JSON.parse(data);
-        } catch (e) {
+        let data = event.data;
+        if (typeof data === 'string') {
+          try {
+            data = JSON.parse(data);
+          } catch (e) {
+            return;
+          }
+        }
+
+        if (!data || typeof data !== 'object') return;
+
+        // Ignore messages echoed by this tab
+        if (data.sender === 'AardvarkPlayerApp') return;
+
+        let type = data.type;
+        let payload = data;
+
+        // Safely unwrap any depth of extension bridge packaging
+        while (type === 'YT_BRIDGE_TO_PAGE' && payload && payload.payload) {
+          payload = payload.payload;
+          type = payload.type;
+        }
+
+        if (!type) return;
+
+        if (payload && payload.sessionId) {
+          this.lastSessionId = payload.sessionId;
+        }
+
+        // Immediately answer handshake and ping probes
+        if (
+          type === 'BRIDGE_HEARTBEAT' ||
+          type === 'PING_BRIDGE' ||
+          type === 'PING' ||
+          type === 'PING_PAGE' ||
+          type === 'CHECK_READY' ||
+          type === 'QUERY_READY'
+        ) {
+          this.sendMessage('PLAYER_READY', { sessionId: this.lastSessionId });
+          if (payload && payload.msgId) {
+            this.sendMessage('APP_ACK', { msgId: payload.msgId });
+          }
+          return;
+        }
+
+        if (type === 'FULL_SYNC_REQUEST') {
+          this.sendSync();
+          return;
+        }
+
+        if (type === 'ADD_VIDEO' || type === 'PLAY_NOW') {
+          if (!this.player.playlistManager || !this.player._isPlaylistLoaded) {
+            console.log(`[CoopManager] Playlist not mounted yet. Buffering ${type} command:`, payload);
+            this._pendingIncomingCommands.push({ type, ...payload });
+            return;
+          }
+          if (type === 'ADD_VIDEO') this.handleRemoteAdd(payload);
+          else this.handleRemotePlay(payload);
+
+          if (payload && payload.msgId) {
+            this.sendMessage('APP_ACK', { msgId: payload.msgId });
+          }
           return;
         }
       }
-
-      if (!data || typeof data !== 'object') return;
-
-      // Ignore messages echoed by this tab
-      if (data.sender === 'AardvarkPlayerApp') return;
-
-      let type = data.type;
-      let payload = data;
-
-      // Safely unwrap any depth of extension bridge packaging
-      while (type === 'YT_BRIDGE_TO_PAGE' && payload && payload.payload) {
-        payload = payload.payload;
-        type = payload.type;
-      }
-
-      if (!type) return;
-
-      if (payload && payload.sessionId) {
-        this.lastSessionId = payload.sessionId;
-      }
-
-      // Immediately answer handshake and ping probes
-      if (
-        type === 'BRIDGE_HEARTBEAT' ||
-        type === 'PING_BRIDGE' ||
-        type === 'PING' ||
-        type === 'PING_PAGE' ||
-        type === 'CHECK_READY' ||
-        type === 'QUERY_READY'
-      ) {
-        this.sendMessage('PLAYER_READY', { sessionId: this.lastSessionId });
-        if (payload && payload.msgId) {
-          this.sendMessage('APP_ACK', { msgId: payload.msgId });
-        }
-        return;
-      }
-
-      if (type === 'FULL_SYNC_REQUEST') {
-        this.sendSync();
-        return;
-      }
-
-      if (type === 'ADD_VIDEO') {
-        this.handleRemoteAdd(payload);
-        if (payload && payload.msgId) {
-          this.sendMessage('APP_ACK', { msgId: payload.msgId });
-        }
-        return;
-      }
-
-      if (type === 'PLAY_NOW') {
-        this.handleRemotePlay(payload);
-        if (payload && payload.msgId) {
-          this.sendMessage('APP_ACK', { msgId: payload.msgId });
-        }
-        return;
-      }
-    }
   handleRemoteAdd(payload) {
       this._handleIncomingVideo(payload);
     }
@@ -287,26 +286,29 @@ class CoopManager {
   }
 
   flushPendingIncomingCommands() {
-      if (this._pendingIncomingCommands && this._pendingIncomingCommands.length > 0) {
-        const cmds = this._pendingIncomingCommands;
-        this._pendingIncomingCommands = [];
-        cmds.forEach(cmd => {
-          const { type, ...payload } = cmd;
-          switch (type) {
-            case 'ADD_VIDEO':
-              this.handleRemoteAdd(payload);
-              break;
-            case 'PLAY_NOW':
-              this.handleRemotePlay(payload);
-              break;
-            case 'FULL_SYNC_REQUEST':
-              this.sendSync();
-              break;
-          }
-        });
+        if (this._pendingIncomingCommands && this._pendingIncomingCommands.length > 0) {
+          const cmds = [...this._pendingIncomingCommands];
+          this._pendingIncomingCommands = [];
+          cmds.forEach(cmd => {
+            const { type, ...payload } = cmd;
+            switch (type) {
+              case 'ADD_VIDEO':
+                this.handleRemoteAdd(payload);
+                break;
+              case 'PLAY_NOW':
+                this.handleRemotePlay(payload);
+                break;
+              case 'FULL_SYNC_REQUEST':
+                this.sendSync();
+                break;
+            }
+            if (cmd.msgId) {
+              this.sendMessage('APP_ACK', { msgId: cmd.msgId });
+            }
+          });
+        }
+        this.sendPlayerReady();
       }
-      this.sendPlayerReady();
-    }
   _handleIncomingVideo(payload) {
       const vId = payload.videoId;
       if (!vId) return;

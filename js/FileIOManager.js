@@ -344,39 +344,40 @@ class FileIOManager {
   }
 
   async processUrlParameters() {
-    const params = new URLSearchParams(window.location.search);
-    const video = params.get('v') || params.get('video');
-    const playlistUrl = params.get('pl') || params.get('playlist');
+      const params = new URLSearchParams(window.location.search);
+      const video = params.get('v') || params.get('video');
+      const titleParam = params.get('title');
+      const shouldPlay = params.get('play') === '1' || params.get('autoplay') === '1';
+      const playlistUrl = params.get('pl') || params.get('playlist');
 
-    if (playlistUrl) {
-      await this.fetchAndLoadPlaylist(playlistUrl);
-    }
-
-    if (video) {
-      const isUrl = video.includes('/') || video.includes('.');
-      let title = 'Direct Video';
-      if (isUrl) {
-        try {
-          const parts = video.split('/');
-          const file = parts[parts.length - 1];
-          title = file.split('?')[0];
-        } catch (e) {}
-      } else {
-        title = `YouTube ${video}`;
+      if (playlistUrl) {
+        await this.fetchAndLoadPlaylist(playlistUrl);
       }
 
-      this.player.playlistManager.add(video, decodeURIComponent(title));
-
-      setTimeout(() => {
-        const idx = this.player.playlistManager.playlist.findIndex(
-          (v) => v.id === video
-        );
-        if (idx !== -1) {
-          this.player.playlistManager._triggerPlay(idx);
+      if (video) {
+        const isUrl = video.includes('/') || video.includes('.');
+        let title = titleParam ? decodeURIComponent(titleParam) : 'Direct Video';
+        if (!titleParam && isUrl) {
+          try {
+            const parts = video.split('/');
+            const file = parts[parts.length - 1];
+            title = file.split('?')[0];
+          } catch (e) {}
+        } else if (!titleParam) {
+          title = `YouTube ${video}`;
         }
-      }, 200);
-    }
-  }
 
+        const idx = this.player.playlistManager.add(video, title, false, shouldPlay);
+
+        setTimeout(() => {
+          const playIdx = idx >= 0 ? idx : this.player.playlistManager.playlist.findIndex(
+            (v) => v.id === video
+          );
+          if (playIdx !== -1 && (shouldPlay || !this.player.gt?.videoPlayer?.isPlaying())) {
+            this.player.playlistManager._triggerPlay(playIdx);
+          }
+        }, 250);
+      }
+    }
 }
 
