@@ -467,6 +467,7 @@ class GlowTunesPlayer {
 
           const cleanVideoId = (videoId || '').trim().replace(/[^a-zA-Z0-9_-]/g, '');
 
+          // Dedicated same-origin pianorolls repository targets
           const candidateUrls = [];
 
           if (finalVeqUrl) {
@@ -478,10 +479,14 @@ class GlowTunesPlayer {
               candidateUrls.push(finalVeqUrl);
             }
           } else if (cleanVideoId) {
-            candidateUrls.push(new URL(`pianorolls/${cleanVideoId}.txt`, window.location.href).href);
+            // 1. Same-origin dedicated pianorolls app: /pianorolls/<id>.txt
+            candidateUrls.push(`${window.location.origin}/pianorolls/${cleanVideoId}.txt`);
+            // 2. Relative sibling: ../pianorolls/<id>.txt
             candidateUrls.push(new URL(`../pianorolls/${cleanVideoId}.txt`, window.location.href).href);
-            candidateUrls.push(`${window.location.origin}/AardvarkPlaylist/pianorolls/${cleanVideoId}.txt`);
-            candidateUrls.push(`https://karmatics.github.io/AardvarkPlaylist/pianorolls/${cleanVideoId}.txt`);
+            // 3. Current subfolder fallback (if bundled locally)
+            candidateUrls.push(new URL(`pianorolls/${cleanVideoId}.txt`, window.location.href).href);
+            // 4. Remote GitHub Pages dedicated pianorolls site fallback
+            candidateUrls.push(`https://karmatics.github.io/pianorolls/${cleanVideoId}.txt`);
           }
 
           let loadedUrl = null;
@@ -497,7 +502,7 @@ class GlowTunesPlayer {
           }
 
           if (!veqText) {
-            throw new Error(`VEQ not found for ${cleanVideoId} across candidates`);
+            throw new Error(`VEQ not found for ${cleanVideoId} across candidate URLs`);
           }
 
           const VEQ = window.VideoEventQueueClass;
