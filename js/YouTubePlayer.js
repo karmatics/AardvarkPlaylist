@@ -483,14 +483,14 @@ class YouTubePlayer {
       this.rootElement = container || document.getElementById('app-container') || document.body;
       this.container = this.rootElement;
 
-      // Remove loading boot screen if present
+      // Immediately remove the boot splash loader to prevent any freeze on startup
       const loader = this.rootElement.querySelector('.aardvark-boot-loader');
       if (loader) loader.remove();
 
       if (!this.pianoLogic) this.pianoLogic = new PianoRollController(this);
       if (!this.headerControlsUI) this.headerControlsUI = new HeaderControlsUI(this);
 
-      // Retrieve full saved state and persistent playlist asynchronously before UI build
+      // Retrieve saved state and persistent playlist asynchronously with 0ms localStorage priority
       const savedData = await this.stateManager.loadPlaylistAsync();
       if (savedData && Array.isArray(savedData.playlist)) {
         this.state.playlistData = savedData;

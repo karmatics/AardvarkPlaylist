@@ -43,22 +43,12 @@ class PlaybackController {
         }
       }
 
-      if (this.player.gt) {
-        this.player.gt.handleTransportCleanup();
-        this.player.gt.destroy();
-        this.player.gt = null;
-      }
-
-      if (this.player.subtleProgressBar) {
-        this.player.subtleProgressBar.destroy();
-        this.player.subtleProgressBar = null;
-      }
-
       VideoEventQueue.clear();
 
       const canvas = this.player.rootElement.querySelector('#canvas-container');
       if (canvas) canvas.style.display = 'none';
 
+      // Bring up or restore dialog immediately
       if (!this.player.videoDialog) {
         const safe = (typeof UITools !== 'undefined' ? UITools.safeArea : null) || { left: 0, right: 0, top: 0, bottom: 0 };
         const parentW = this.player.rootElement === document.body ? window.innerWidth : this.player.rootElement.clientWidth;
@@ -142,35 +132,37 @@ class PlaybackController {
         this.player.videoDialog.setTitle(title);
         this.player.videoDialog.setZOnTop();
         this.player.videoDialog.element.style.display = 'flex';
-        this.player.videoContainer.innerHTML = '';
         this.player.headerControlsUI.build();
       }
 
-      this.player.gt = new GlowTunesPlayer(
-        this.player.videoContainer,
-        this.player.rootElement,
-        {
-          basePath: this.player.basePath,
-          initialSettings: this.player.state.settings,
-          startTime: item.startTime,
-          endTime: item.endTime,
+      // Create GlowTunesPlayer once if it does not exist
+      if (!this.player.gt) {
+        this.player.gt = new GlowTunesPlayer(
+          this.player.videoContainer,
+          this.player.rootElement,
+          {
+            basePath: this.player.basePath,
+            initialSettings: this.player.state.settings,
+            startTime: item.startTime,
+            endTime: item.endTime,
+          }
+        );
+
+        this.player.subtleProgressBar = new SubtleProgressBar(this.player);
+        this.player.subtleProgressBar.mount(this.player.videoContainerWrapper);
+
+        if (this.player.state.geometry && this.player.gt.pianoVisuals) {
+          Object.assign(
+            this.player.gt.pianoVisuals.geometrySettings,
+            this.player.state.geometry
+          );
         }
-      );
 
-      this.player.subtleProgressBar = new SubtleProgressBar(this.player);
-      this.player.subtleProgressBar.mount(this.player.videoContainerWrapper);
-
-      if (this.player.state.geometry && this.player.gt.pianoVisuals) {
-        Object.assign(
-          this.player.gt.pianoVisuals.geometrySettings,
-          this.player.state.geometry
+        this.player.gt.onStateChange = (s) => this.handlePlayerState(s);
+        this.player.gt.registerTimeUpdateCallback((t, isPlaying, isReset) =>
+          this.onGlobalTimeUpdate(t, isPlaying)
         );
       }
-
-      this.player.gt.onStateChange = (s) => this.handlePlayerState(s);
-      this.player.gt.registerTimeUpdateCallback((t, isPlaying, isReset) =>
-        this.onGlobalTimeUpdate(t, isPlaying)
-      );
 
       let startTime = item.startTime || 0;
       if (this.player.activeSegments) {
@@ -178,9 +170,9 @@ class PlaybackController {
         startTime = this.player.activeSegments[0].start;
       }
 
-      const skipVeq = this.player.state.settings.fetchPianoRolls === false;
+      const skipVeq = (item.hasPianoRoll === false) || (this.player.state.settings.fetchPianoRolls === false);
 
-      // Immediately trigger playback enforcer so the video begins right away
+      // Start video playback immediately
       this.ensurePlaybackStart();
 
       this.player.gt.load(item.id, skipVeq ? 'SKIP' : null).then(() => {
@@ -237,8 +229,10 @@ class PlaybackController {
         const style = this.player.state.settings.keyboardStyle || '3d';
         this.player._applyDisplayModeAfterLoad(style);
       }).catch(err => {
-        console.warn('[PlaybackController] Video load error:', err);
+        console.warn('[PlaybackController] Load error caught:', err);
       });
+
+      this.ensurePlaybackStart();
     }
   handlePlayerState(s) {
     const vp = this.player.gt?.videoPlayer;

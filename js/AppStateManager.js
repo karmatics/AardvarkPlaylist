@@ -132,35 +132,40 @@ class AppStateManager {
   }
 
   async loadPlaylistAsync() {
-    try {
-      const db = await this._getDB();
-      const tx = db.transaction('store', 'readonly');
-      const store = tx.objectStore('store');
-      const req = store.get('current_playlist');
-      
-      return new Promise((resolve) => {
-        req.onsuccess = () => {
-          let data = req.result;
-          if (!data) {
-            // Fallback to local storage migration if never transitioned
-            try {
-              const localStr = localStorage.getItem('yt_playlist');
-              if (localStr) {
-                data = JSON.parse(localStr);
-                this._savePlaylistToDB(data); // commit to IDB
-              }
-            } catch (e) {}
-          }
-          resolve(data);
-        };
-        req.onerror = () => resolve(null);
-      });
-    } catch (e) {
-      console.error('IDB load failed', e);
-      return null;
-    }
-  }
+      let localData = null;
+      try {
+        const localStr = localStorage.getItem('yt_playlist');
+        if (localStr) localData = JSON.parse(localStr);
+      } catch (e) {}
 
+      if (localData && Array.isArray(localData.playlist) && localData.playlist.length > 0) {
+        return localData;
+      }
+
+      try {
+        const dbPromise = this._getDB();
+        const timeoutPromise = new Promise(r => setTimeout(() => r(null), 300));
+        const db = await Promise.race([dbPromise, timeoutPromise]);
+        if (!db) return localData;
+
+        return new Promise((resolve) => {
+          const timeout = setTimeout(() => resolve(localData), 300);
+          const tx = db.transaction('store', 'readonly');
+          const store = tx.objectStore('store');
+          const req = store.get('current_playlist');
+          req.onsuccess = () => {
+            clearTimeout(timeout);
+            resolve(req.result || localData);
+          };
+          req.onerror = () => {
+            clearTimeout(timeout);
+            resolve(localData);
+          };
+        });
+      } catch (e) {
+        return localData;
+      }
+    }
   async _savePlaylistToDB(data) {
         try {
           const db = await this._getDB();
