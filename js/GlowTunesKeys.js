@@ -681,105 +681,91 @@ class GlowTunesKeys {
   }
 
   static _registerDirectKeys(ctx) {
-        const { player, kch, addInstVolume } = ctx;
-        const showBox = (msg) =>
-          kch.showFollowupBox(
-            msg,
-            window.innerWidth / 2,
-            window.innerHeight / 2 + 80
-          );
+      const { player, kch, addInstVolume } = ctx;
+      const showBox = (msg) =>
+        kch.showFollowupBox(
+          msg,
+          window.innerWidth / 2,
+          window.innerHeight / 2 + 80
+        );
 
-        kch.addCommand(32, () => {
-          if (player.gt?.videoPlayer?.isPlaying()) {
-            player.gt.pause();
-            showBox('Pause');
-          } else {
-            player.gt?.play();
-            showBox('Play');
-          }
+      kch.addCommand(32, () => {
+        if (player.gt?.videoPlayer?.isPlaying()) {
+          player.gt.pause();
+          showBox('Pause');
+        } else {
+          player.gt?.play();
+          showBox('Play');
+        }
+      });
+
+      kch.addCommand(8, () => {
+        player._triggerDelete();
+        showBox('Deleted');
+      });
+      kch.addCommand(46, () => {
+        player._triggerDelete();
+        showBox('Deleted');
+      });
+
+      const changeVideoVol = (delta) => {
+        let v = player.state.settings.videoVolume ?? (player.gt?.videoPlayer?.getVolume() ?? 100);
+        v = Math.max(0, Math.min(100, v + delta));
+        player._volumeChangingLock = Date.now();
+
+        if (player.gt) {
+          player.gt.setVideoVolume(v);
+        }
+
+        player.state.settings.videoVolume = v;
+        player._saveSettings();
+
+        document.querySelectorAll('.gt-video-vol-slider').forEach(sl => {
+          sl.value = v;
         });
+        showBox(`Video Vol: ${Math.round(v)}%`);
+      };
 
-        kch.addCommand(8, () => {
-          player._triggerDelete();
-          showBox('Deleted');
-        });
-        kch.addCommand(46, () => {
-          player._triggerDelete();
-          showBox('Deleted');
-        });
+      // Arrow Right (39): Scrub forward by default, volume if Ctrl held
+      kch.addCommand(39, (e) => {
+        if (e && (e.ctrlKey || e.metaKey)) changeVideoVol(+5);
+        else {
+          const cur = player.gt?.videoPlayer?.getCurrentRawTime() || 0;
+          player.gt?.seekTo(cur + 5);
+          showBox('+5s');
+        }
+      });
 
-        const changeVideoVol = (delta) => {
-          let v = player.gt?.videoPlayer?.getVolume() ?? 100;
-          v = Math.max(0, Math.min(100, v + delta));
-          
-          // Set programmatic change lock
-          player._volumeChangingLock = Date.now();
-          
-          if (player.gt) {
-            player.gt.setVideoVolume(v);
-          }
-          
-          player.state.settings.videoVolume = v;
-          player._saveSettings();
-          
-          window.smartLog?.('Volume', `[Hotkey (Ctrl+Arrows)] User set volume to ${v}`);
+      // Arrow Left (37): Scrub backward by default, volume if Ctrl held
+      kch.addCommand(37, (e) => {
+        if (e && (e.ctrlKey || e.metaKey)) changeVideoVol(-5);
+        else {
+          const cur = player.gt?.videoPlayer?.getCurrentRawTime() || 0;
+          player.gt?.seekTo(Math.max(0, cur - 5));
+          showBox('-5s');
+        }
+      });
 
-          document.querySelectorAll('.gt-video-vol-slider').forEach(sl => {
-            sl.value = v;
-          });
-
-          showBox(`Video Vol: ${Math.round(v)}%`);
-        };
-
-        kch.addCommand(39, (e) => {
-          if (e.ctrlKey || e.metaKey) changeVideoVol(+10);
-          else
-            player.gt?.seekTo(
-              (player.gt?.videoPlayer?.getCurrentRawTime() || 0) + 2
-            );
-        });
-        kch.addCommand(37, (e) => {
-          if (e.ctrlKey || e.metaKey) changeVideoVol(-10);
-          else
-            player.gt?.seekTo(
-              Math.max(0, (player.gt?.videoPlayer?.getCurrentRawTime() || 0) - 2)
-            );
-        });
-
-        kch.addCommand(38, () => {
-          const veq = window.VideoEventQueueClass?.current;
-          const hasTrack1 =
-            veq &&
-            veq.timedEvents &&
-            veq.timedEvents.some((e) => e.type === 'note' && e.tr === 1);
-          const splitMethod = player.currentPlayItem?.songSettings?.splitMethod;
-          const splitActive = hasTrack1 || window.arpEnabled || !!splitMethod;
-
+      // Arrow Up (38): Video volume by default (+5%), Instrument volume if Ctrl held
+      kch.addCommand(38, (e) => {
+        if (e && (e.ctrlKey || e.metaKey)) {
           const v = Math.round(addInstVolume(+10) / 10);
-          if (splitActive) {
-            showBox(`𝄢 ${v} 𝄞 ${v}`);
-          } else {
-            showBox(`Inst Vol: ${v}`);
-          }
-        });
-        kch.addCommand(40, () => {
-          const veq = window.VideoEventQueueClass?.current;
-          const hasTrack1 =
-            veq &&
-            veq.timedEvents &&
-            veq.timedEvents.some((e) => e.type === 'note' && e.tr === 1);
-          const splitMethod = player.currentPlayItem?.songSettings?.splitMethod;
-          const splitActive = hasTrack1 || window.arpEnabled || !!splitMethod;
+          showBox(`Inst Vol: ${v}`);
+        } else {
+          changeVideoVol(+5);
+        }
+      });
 
+      // Arrow Down (40): Video volume by default (-5%), Instrument volume if Ctrl held
+      kch.addCommand(40, (e) => {
+        if (e && (e.ctrlKey || e.metaKey)) {
           const v = Math.round(addInstVolume(-10) / 10);
-          if (splitActive) {
-            showBox(`𝄢 ${v} 𝄞 ${v}`);
-          } else {
-            showBox(`Inst Vol: ${v}`);
-          }
-        });
-      }
-
+          showBox(`Inst Vol: ${v}`);
+        } else {
+          changeVideoVol(-5);
+        }
+      });
+    }
   static showHelpDialog(player) {
     if (typeof UITools === 'undefined') return;
 

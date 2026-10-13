@@ -23,12 +23,14 @@ class Playlist {
     }
 
   load(data) {
-    if (!data) return;
-    if (Array.isArray(data.playlist)) this.playlist = data.playlist;
-    if (typeof data.index === 'number') this.currentIndex = data.index;
-    this.renderItems();
-  }
-
+      if (!data) return;
+      if (Array.isArray(data.playlist)) this.playlist = data.playlist;
+      if (typeof data.index === 'number' && data.index >= 0 && data.index < this.playlist.length) {
+        this.currentIndex = data.index;
+      }
+      this.renderItems();
+      this.scrollToCurrent();
+    }
   getData() {
     return {
       playlist: this.playlist.filter((v) => !v.playOnce),

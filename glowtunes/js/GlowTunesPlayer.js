@@ -398,173 +398,126 @@ class GlowTunesPlayer {
   }
 
   async load(videoId, veqSourceUrl) {
-        this.handleTransportCleanup();
+      this.handleTransportCleanup();
 
-        if (window.VideoEventQueueClass) window.VideoEventQueueClass.clear();
-        this.originalVeqData = null;
+      if (window.VideoEventQueueClass) window.VideoEventQueueClass.clear();
+      this.originalVeqData = null;
+      this.transposeOffset = 0;
+
+      if (this.synchronizer) this.synchronizer.unloadVEQ();
+      if (window.VideoEventScheduler) window.VideoEventScheduler.stopAndClearQueue();
+
+      if (this.pianoVisuals) {
+        this.pianoVisuals.hide();
+        this.pianoVisuals.loadVeq(null);
+      }
+      if (this.karaokeDisplay) {
+        this.karaokeDisplay.loadVeq(null);
+      }
+
+      const playerOptions = this._determinePlayerOptions(videoId);
+
+      this.videoPlayer?.destroy();
+      this.videoPlayer = null;
+      this.videoContainer.innerHTML = '';
+
+      if (this.options.startTime > 0) {
+        this._pendingSeekTime = this.options.startTime;
+      }
+
+      // 1. Initialize video playback IMMEDIATELY without waiting for notes or audio downloads
+      try {
+        this.videoPlayer = new VideoPlayer(
+          {
+            container: this.videoContainer,
+            ...playerOptions,
+            autoplay: this.options.autoplay !== undefined ? this.options.autoplay : true,
+            controls: this.options.controls !== undefined ? this.options.controls : true,
+            startTime: this.options.startTime,
+            endTime: this.options.endTime,
+          },
+          this.handlePlayerStateUpdate.bind(this)
+        );
+
+        if (
+          this.karaokeDisplay &&
+          this.karaokeDisplay.element &&
+          !this.karaokeDisplay.element.isConnected
+        ) {
+          this.notesContainer.appendChild(this.karaokeDisplay.element);
+        }
+
+        this.synchronizer.init(this.videoPlayer);
+      } catch (playerError) {
+        this.videoPlayer = null;
+        this.videoContainer.innerHTML =
+          '<p style="color: red; padding: 20px;">Error creating video player.</p>';
+        throw playerError;
+      }
+
+      // 2. Concurrently fetch piano roll in background without stalling video startup
+      const fetchVeqAsync = async () => {
+        let finalVeqUrl = veqSourceUrl;
+        if (finalVeqUrl === 'SKIP') return;
+
+        const cleanVideoId = (videoId || '').trim().replace(/[^a-zA-Z0-9_-]/g, '');
+        const candidateUrls = [];
+
+        if (finalVeqUrl) {
+          if (finalVeqUrl.startsWith('/') && !finalVeqUrl.startsWith('//')) {
+            candidateUrls.push(new URL(finalVeqUrl.substring(1), window.location.href).href);
+          } else if (!finalVeqUrl.startsWith('http')) {
+            candidateUrls.push(new URL(finalVeqUrl, window.location.href).href);
+          } else {
+            candidateUrls.push(finalVeqUrl);
+          }
+        } else if (cleanVideoId) {
+          candidateUrls.push(`${window.location.origin}/pianorolls/${cleanVideoId}.txt`);
+          candidateUrls.push(new URL(`../pianorolls/${cleanVideoId}.txt`, window.location.href).href);
+          candidateUrls.push(new URL(`pianorolls/${cleanVideoId}.txt`, window.location.href).href);
+          candidateUrls.push(`https://karmatics.github.io/pianorolls/${cleanVideoId}.txt`);
+        }
+
+        let veqText = null;
+        // Parallel fast fetch check
+        const fetchPromises = candidateUrls.map(url =>
+          fetch(url)
+            .then(res => res.ok ? res.text() : Promise.reject())
+            .catch(() => null)
+        );
+
+        const results = await Promise.all(fetchPromises);
+        veqText = results.find(t => typeof t === 'string' && t.trim().length > 0);
+
+        if (!veqText) return;
+
+        const VEQ = window.VideoEventQueueClass;
+        const parsedData = VEQ ? VEQ.parse(veqText) : null;
+        if (!parsedData || !parsedData.timedEvents || parsedData.timedEvents.length === 0) return;
+
+        if (VEQ) VEQ.load(parsedData);
+        this.originalVeqData = JSON.parse(JSON.stringify(parsedData));
         this.transposeOffset = 0;
-
-        if (this.synchronizer) this.synchronizer.unloadVEQ();
-        if (window.VideoEventScheduler) window.VideoEventScheduler.stopAndClearQueue();
+        this.instruments.setTranspose(0);
 
         if (this.pianoVisuals) {
-          this.pianoVisuals.hide();
-          this.pianoVisuals.loadVeq(null);
-        }
-        if (this.karaokeDisplay) {
-          this.karaokeDisplay.loadVeq(null);
-        }
-
-        const playerOptions = this._determinePlayerOptions(videoId);
-
-        this.videoPlayer?.destroy();
-        this.videoPlayer = null;
-
-        this.videoContainer.innerHTML = '';
-
-        if (this.options.startTime > 0) {
-          this._pendingSeekTime = this.options.startTime;
-        }
-
-        try {
-          this.videoPlayer = new VideoPlayer(
-            {
-              container: this.videoContainer,
-              ...playerOptions,
-              autoplay:
-                this.options.autoplay !== undefined ? this.options.autoplay : true,
-              controls:
-                this.options.controls !== undefined ? this.options.controls : true,
-              startTime: this.options.startTime,
-              endTime: this.options.endTime,
-            },
-            this.handlePlayerStateUpdate.bind(this)
-          );
-
-          if (
-            this.karaokeDisplay &&
-            this.karaokeDisplay.element &&
-            !this.karaokeDisplay.element.isConnected
-          ) {
-            this.notesContainer.appendChild(this.karaokeDisplay.element);
-          }
-
-          this.synchronizer.init(this.videoPlayer);
-        } catch (playerError) {
-          this.videoPlayer = null;
-          this.videoContainer.innerHTML =
-            '<p style="color: red; padding: 20px;">Error creating video player.</p>';
-          throw playerError;
-        }
-
-        try {
-          let veqText;
-          let finalVeqUrl = veqSourceUrl;
-
-          if (finalVeqUrl === 'SKIP') {
-            throw new Error('Skipping VEQ fetch (Globally Disabled)');
-          }
-
-          const cleanVideoId = (videoId || '').trim().replace(/[^a-zA-Z0-9_-]/g, '');
-
-          // Dedicated same-origin pianorolls repository targets
-          const candidateUrls = [];
-
-          if (finalVeqUrl) {
-            if (finalVeqUrl.startsWith('/') && !finalVeqUrl.startsWith('//')) {
-              candidateUrls.push(new URL(finalVeqUrl.substring(1), window.location.href).href);
-            } else if (!finalVeqUrl.startsWith('http')) {
-              candidateUrls.push(new URL(finalVeqUrl, window.location.href).href);
-            } else {
-              candidateUrls.push(finalVeqUrl);
-            }
-          } else if (cleanVideoId) {
-            // 1. Same-origin dedicated pianorolls app: /pianorolls/<id>.txt
-            candidateUrls.push(`${window.location.origin}/pianorolls/${cleanVideoId}.txt`);
-            // 2. Relative sibling: ../pianorolls/<id>.txt
-            candidateUrls.push(new URL(`../pianorolls/${cleanVideoId}.txt`, window.location.href).href);
-            // 3. Current subfolder fallback (if bundled locally)
-            candidateUrls.push(new URL(`pianorolls/${cleanVideoId}.txt`, window.location.href).href);
-            // 4. Remote GitHub Pages dedicated pianorolls site fallback
-            candidateUrls.push(`https://karmatics.github.io/pianorolls/${cleanVideoId}.txt`);
-          }
-
-          let loadedUrl = null;
-          for (const urlToTry of candidateUrls) {
-            try {
-              const response = await fetch(urlToTry);
-              if (response.ok) {
-                veqText = await response.text();
-                loadedUrl = urlToTry;
-                break;
-              }
-            } catch (fetchErr) {}
-          }
-
-          if (!veqText) {
-            throw new Error(`VEQ not found for ${cleanVideoId} across candidate URLs`);
-          }
-
-          const VEQ = window.VideoEventQueueClass;
-          const parsedData = VEQ ? VEQ.parse(veqText) : null;
-
-          if (
-            !parsedData ||
-            !parsedData.timedEvents ||
-            parsedData.timedEvents.length === 0
-          ) {
-            throw new Error('Parsed VEQ contains no events');
-          }
-
-          if (VEQ) VEQ.load(parsedData);
-
-          this.originalVeqData = JSON.parse(JSON.stringify(parsedData));
-
-          this.transposeOffset = 0;
-          this.instruments.setTranspose(0);
-
-          this.setAutoplay(this.autoplay);
-
-          if (parsedData.metadata?.start !== undefined && !this.options.startTime) {
-            this.options.startTime = parsedData.metadata.start / 1000;
-            if (this.videoPlayer && this.videoPlayer.isReady) {
-              this.videoPlayer.seekTo(this.options.startTime);
-            } else {
-              this._pendingSeekTime = this.options.startTime;
-            }
-          }
-
-          if (this.pianoVisuals) {
-            this.pianoVisuals.updateLayout();
-            if (VEQ) this.pianoVisuals.loadVeq(VEQ.current);
-            if (
-              this.options.initialSettings &&
-              this.options.initialSettings.showPianoRoll !== false
-            ) {
-              this.pianoVisuals.show();
-            }
-          }
-          if (this.karaokeDisplay && VEQ) {
-            this.karaokeDisplay.loadVeq(VEQ.current);
-          }
-        } catch (e) {
-          this.synchronizer.unloadVEQ();
-          if (window.VideoEventScheduler) window.VideoEventScheduler.stopAndClearQueue();
-
-          this.originalVeqData = null;
-          this.transposeOffset = 0;
-
-          if (window.VideoEventQueueClass) window.VideoEventQueueClass.clear();
-
-          if (this.pianoVisuals) {
-            this.pianoVisuals.hide();
-            this.pianoVisuals.loadVeq(null);
-          }
-          if (this.karaokeDisplay) {
-            this.karaokeDisplay.loadVeq(null);
+          this.pianoVisuals.updateLayout();
+          if (VEQ) this.pianoVisuals.loadVeq(VEQ.current);
+          if (this.options.initialSettings && this.options.initialSettings.showPianoRoll !== false) {
+            this.pianoVisuals.show();
           }
         }
-      }
+        if (this.karaokeDisplay && VEQ) {
+          this.karaokeDisplay.loadVeq(VEQ.current);
+        }
+        if (this.synchronizer && VEQ) {
+          this.synchronizer.loadVEQ(VEQ.current);
+        }
+      };
+
+      // Trigger non-blocking async fetch
+      fetchVeqAsync().catch(err => console.warn('[GlowTunesPlayer] Note load info:', err));
+    }
   constructor(videoContainer, notesContainer, options = {}) {
     this._state = {
       videoPlayer: null, synchronizer: null, instruments: null,

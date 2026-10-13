@@ -8,283 +8,238 @@ class PlaybackController {
   }
 
   playVideo(item, index) {
-        this.player._closeQuickSettingsDropdown();
+      this.player._closeQuickSettingsDropdown();
 
-        if (this.player.coopManager) {
-          this.player.coopManager.broadcastPeerMessage({
-            type: 'PLAY_VIDEO',
-            item: item,
-          });
-        }
-
-        const title = item.title || `Unknown Video`;
-        try {
-          document.title = title;
-        } catch (e) {
-          window.document.title = title;
-        }
-
-        this.player.currentPlayItem = item;
-        this.player.activeSegments = item.segments && item.segments.length > 0 ? item.segments : null;
-        this.player.currentSegmentIndex = 0;
-
-        if (this.playEnforcer) {
-          clearInterval(this.playEnforcer);
-          this.playEnforcer = null;
-        }
-
-        if (this.fadeInterval) {
-          clearInterval(this.fadeInterval);
-          this.fadeInterval = null;
-          this.isFadingOut = false;
-          if (this.fadeOriginalVidVol !== undefined && this.player.gt) {
-            this.player.gt.setVideoVolume(this.fadeOriginalVidVol);
-            this.fadeOriginalVidVol = undefined;
-          }
-        }
-
-        if (this.player.gt) {
-          this.player.gt.handleTransportCleanup();
-          this.player.gt.destroy();
-          this.player.gt = null;
-        }
-
-        if (this.player.subtleProgressBar) {
-          this.player.subtleProgressBar.destroy();
-          this.player.subtleProgressBar = null;
-        }
-
-        VideoEventQueue.clear();
-
-        const canvas = this.player.rootElement.querySelector('#canvas-container');
-        if (canvas) canvas.style.display = 'none';
-
-        if (!this.player.videoDialog) {
-          const safe = (typeof UITools !== 'undefined' ? UITools.safeArea : null) || { left: 0, right: 0, top: 0, bottom: 0 };
-
-          const parentW = this.player.rootElement === document.body ? window.innerWidth : this.player.rootElement.clientWidth;
-          const parentH = this.player.rootElement === document.body ? window.innerHeight : this.player.rootElement.clientHeight;
-
-          const availW = parentW - safe.left - safe.right;
-          const availH = parentH - safe.top - safe.bottom;
-          let targetW = Math.max(600, Math.min(1000, availW - 40));
-          let targetH = targetW * (9 / 16) + 40; // Maintain 16:9 plus header/controls allowance
-          let targetX = safe.left + (availW - targetW) / 2;
-          let targetY = safe.top + (availH - targetH) / 2;
-          if (targetY < 50) targetY = 50;
-          if (targetX < safe.left) targetX = safe.left + 20;
-
-          // Full-height flex wrapper
-          this.player.videoContainerWrapper = makeElement('div', {
-            style: 'width:100%; height:100%; flex:1; min-height:0; display:flex; flex-direction:column; background:#000; position:relative; overflow:hidden;',
-          });
-
-          // Relative container that expands and allows the absolute iframe to fill 100% of height
-          this.player.videoContainer = makeElement('div', {
-            style: 'flex:1; width:100%; height:100%; min-height:0; position:relative; overflow:hidden;',
-          });
-
-          const spacer = makeElement('div', { className: 'video-dock-spacer' });
-
-          this.player.videoContainerWrapper.appendChild(this.player.videoContainer);
-          this.player.videoContainerWrapper.appendChild(spacer);
-
-          this.player.videoDialog = UITools.makeDialog({
-            title: title,
-            width: `${Math.round(targetW)}px`,
-            height: `${Math.round(targetH)}px`,
-            position: [Math.round(targetX), Math.round(targetY)],
-            appendTo: this.player.rootElement,
-            minWidth: 400,
-            minHeight: 240,
-            contentElement: this.player.videoContainerWrapper,
-            noPadding: true,
-            allowMaximize: true,
-            allowTransparency: false,
-            stateId: 'yt_main_player_dialog',
-            onClose: () => {
-              try { document.title = 'Aardvark Playlist'; } catch(e) { window.document.title = 'Aardvark Playlist'; }
-              if (this.playEnforcer) clearInterval(this.playEnforcer);
-              if (this.fadeInterval) {
-                clearInterval(this.fadeInterval);
-                this.fadeInterval = null;
-                this.isFadingOut = false;
-              }
-              if (this.player.subtleProgressBar) {
-                this.player.subtleProgressBar.destroy();
-                this.player.subtleProgressBar = null;
-              }
-              this.player.gt?.handleTransportCleanup();
-              this.player.gt?.destroy();
-              this.player.gt = null;
-              VideoEventQueue.clear();
-              this.player.videoDialog = null;
-              this.player.viewportManager.destroy3DApp();
-              this.player._closeQuickSettingsDropdown();
-            },
-          });
-
-          if (typeof this.player.videoDialog._applyStyles === 'function') {
-            this.player.videoDialog._applyStyles();
-          }
-
-          this.player.headerControls = makeElement('div', {
-            className: 'gt-header-controls',
-            style: 'display:flex; align-items:center; gap:10px; margin-right:15px; font-family:sans-serif;',
-            onmousedown: (e) => e.stopPropagation(),
-          });
-
-          const controlsTarget = this.player.videoDialog.header.querySelector('.uw-controls');
-          if (controlsTarget) {
-            this.player.videoDialog.header.insertBefore(this.player.headerControls, controlsTarget);
-          } else {
-            this.player.videoDialog.header.appendChild(this.player.headerControls);
-          }
-
-          this.player.headerControlsUI.build();
-          this.player.videoDialog.setZOnTop();
-        } else {
-          this.player.videoDialog.setTitle(title);
-          this.player.videoDialog.setZOnTop();
-          this.player.videoDialog.element.style.display = 'flex';
-          this.player.videoContainer.innerHTML = '';
-          this.player.headerControlsUI.build();
-        }
-
-        this.player.gt = new GlowTunesPlayer(
-          this.player.videoContainer,
-          this.player.rootElement,
-          {
-            basePath: this.player.basePath,
-            initialSettings: this.player.state.settings,
-            startTime: item.startTime,
-            endTime: item.endTime,
-          }
-        );
-
-        this.player.subtleProgressBar = new SubtleProgressBar(this.player);
-        this.player.subtleProgressBar.mount(this.player.videoContainerWrapper);
-
-        if (this.player.state.geometry && this.player.gt.pianoVisuals) {
-          Object.assign(
-            this.player.gt.pianoVisuals.geometrySettings,
-            this.player.state.geometry
-          );
-        }
-
-        this.player.gt.onStateChange = (s) => this.handlePlayerState(s);
-        this.player.gt.registerTimeUpdateCallback((t, isPlaying, isReset) =>
-          this.onGlobalTimeUpdate(t, isPlaying)
-        );
-
-        let startTime = item.startTime || 0;
-        if (this.player.activeSegments) {
-          this.player.activeSegments.sort((a, b) => a.start - b.start);
-          startTime = this.player.activeSegments[0].start;
-        }
-
-        const skipVeq = this.player.state.settings.fetchPianoRolls === false;
-
-        this.player.gt.load(item.id, skipVeq ? 'SKIP' : null).then(() => {
-          if (startTime > 0) this.player.gt.seekTo(startTime);
-          this.ensurePlaybackStart();
-
-          const savedVol = this.player.state.settings.videoVolume;
-          if (savedVol !== undefined) {
-             this.player.gt.setVideoVolume(savedVol);
-          }
-
-          const veqData = window.VideoEventQueueClass?.current;
-          const hasNotes =
-            veqData &&
-            veqData.timedEvents &&
-            veqData.timedEvents.some((e) => e.type === 'note');
-
-          if (hasNotes) {
-            if (!item.hasPianoRoll) {
-              item.hasPianoRoll = true;
-              this.player._saveState();
-              this.player.playlistManager?.renderItems();
-            }
-
-            if (!localStorage.getItem('aardvark_midi_prompted')) {
-              localStorage.setItem('aardvark_midi_prompted', 'true');
-              if (!this.player.state.settings.midiEnabled) {
-                this.player._showMidiPrompt();
-              }
-            }
-
-            const s = item.songSettings || {};
-
-            if ((s.transpose === undefined || s.transpose === 0) && this.player.state.settings.smartAutoArp !== false) {
-              SmartArpController.applySmartRangeTransposition(this.player.gt, veqData);
-            }
-
-            if (s.tracks && this.player.gt.instruments) {
-              this.player.gt.instruments.setVolume(1.0);
-              this.player.gt.instruments.restoreTrackState(s.tracks);
-            }
-
-            const userTranspose = s.transpose || 0;
-            if (userTranspose !== 0) {
-              this.player.gt.setTranspose(userTranspose);
-            }
-            this.player.state.settings.transpose = this.player.gt.transposeOffset;
-
-            if (s.splitMethod) {
-              this.player.state.settings.splitPitch = s.splitPitch || 60;
-              this.player.pianoLogic.splitTracks(
-                s.splitMethod,
-                this.player.state.settings.splitPitch,
-                true
-              );
-            } else if (this.player.state.settings.smartAutoArp !== false) {
-              const autoResult = VideoEventQueue.detectOptimalSplitAndChords(veqData, this.player.state.settings.smartAutoArpVerbose);
-              if (autoResult) {
-                const defaults = VideoEventQueue.getSmartArpDefaults();
-                window.arpEnabled = true;
-                window.arpGlobalSpread = defaults.arpSpread;
-                window.arpPattern = defaults.arpPattern;
-                window.arpAnchor = defaults.arpAnchor;
-                window.arpGlobalLenFactor = defaults.arpLenFactor;
-                this.player.state.settings.splitPitch = autoResult.splitPitch;
-                this.player.pianoLogic.splitTracks('smart', autoResult.splitPitch, true);
-                if (this.player.gt?.instruments) {
-                  this.player.gt.instruments.setVolume(1.0);
-                  this.player.gt.instruments.restoreTrackState([
-                    { instrument: defaults.trebleInstrument, volume: defaults.trebleVolume, octaveShift: 0 },
-                    { instrument: defaults.bassInstrument, volume: defaults.bassVolume, octaveShift: 0 }
-                  ]);
-                }
-              } else {
-                window.arpEnabled = false;
-              }
-            }
-
-            if (window.arpEnabled && window.VideoEventQueueClass) {
-              window.VideoEventQueueClass.findChords(false);
-            }
-
-            this.player._refreshVisuals();
-            if (this.player.gt.synchronizer)
-              this.player.gt.synchronizer.resyncScheduler();
-          } else {
-            if (this.player.state.settings.fetchPianoRolls !== false) {
-              if (item.hasPianoRoll !== false) {
-                item.hasPianoRoll = false;
-                this.player._saveState();
-                this.player.playlistManager?.renderItems();
-              }
-            }
-            this.player.state.settings.transpose = 0;
-          }
-
-          this.player.headerControlsUI.build();
-
-          const style = this.player.state.settings.keyboardStyle || '3d';
-          this.player._applyDisplayModeAfterLoad(style);
+      if (this.player.coopManager) {
+        this.player.coopManager.broadcastPeerMessage({
+          type: 'PLAY_VIDEO',
+          item: item,
         });
       }
+
+      const title = item.title || `Unknown Video`;
+      try {
+        document.title = title;
+      } catch (e) {
+        window.document.title = title;
+      }
+
+      this.player.currentPlayItem = item;
+      this.player.activeSegments = item.segments && item.segments.length > 0 ? item.segments : null;
+      this.player.currentSegmentIndex = 0;
+
+      if (this.playEnforcer) {
+        clearInterval(this.playEnforcer);
+        this.playEnforcer = null;
+      }
+
+      if (this.fadeInterval) {
+        clearInterval(this.fadeInterval);
+        this.fadeInterval = null;
+        this.isFadingOut = false;
+        if (this.fadeOriginalVidVol !== undefined && this.player.gt) {
+          this.player.gt.setVideoVolume(this.fadeOriginalVidVol);
+          this.fadeOriginalVidVol = undefined;
+        }
+      }
+
+      if (this.player.gt) {
+        this.player.gt.handleTransportCleanup();
+        this.player.gt.destroy();
+        this.player.gt = null;
+      }
+
+      if (this.player.subtleProgressBar) {
+        this.player.subtleProgressBar.destroy();
+        this.player.subtleProgressBar = null;
+      }
+
+      VideoEventQueue.clear();
+
+      const canvas = this.player.rootElement.querySelector('#canvas-container');
+      if (canvas) canvas.style.display = 'none';
+
+      if (!this.player.videoDialog) {
+        const safe = (typeof UITools !== 'undefined' ? UITools.safeArea : null) || { left: 0, right: 0, top: 0, bottom: 0 };
+        const parentW = this.player.rootElement === document.body ? window.innerWidth : this.player.rootElement.clientWidth;
+        const parentH = this.player.rootElement === document.body ? window.innerHeight : this.player.rootElement.clientHeight;
+
+        const availW = parentW - safe.left - safe.right;
+        const availH = parentH - safe.top - safe.bottom;
+        let targetW = Math.max(600, Math.min(1000, availW - 40));
+        let targetH = targetW * (9 / 16) + 40;
+        let targetX = safe.left + (availW - targetW) / 2;
+        let targetY = safe.top + (availH - targetH) / 2;
+        if (targetY < 50) targetY = 50;
+        if (targetX < safe.left) targetX = safe.left + 20;
+
+        this.player.videoContainerWrapper = makeElement('div', {
+          style: 'width:100%; height:100%; flex:1; min-height:0; display:flex; flex-direction:column; background:#000; position:relative; overflow:hidden;',
+        });
+
+        this.player.videoContainer = makeElement('div', {
+          style: 'flex:1; width:100%; height:100%; min-height:0; position:relative; overflow:hidden;',
+        });
+
+        const spacer = makeElement('div', { className: 'video-dock-spacer' });
+        this.player.videoContainerWrapper.appendChild(this.player.videoContainer);
+        this.player.videoContainerWrapper.appendChild(spacer);
+
+        this.player.videoDialog = UITools.makeDialog({
+          title: title,
+          width: `${Math.round(targetW)}px`,
+          height: `${Math.round(targetH)}px`,
+          position: [Math.round(targetX), Math.round(targetY)],
+          appendTo: this.player.rootElement,
+          minWidth: 400,
+          minHeight: 240,
+          contentElement: this.player.videoContainerWrapper,
+          noPadding: true,
+          allowMaximize: true,
+          allowTransparency: false,
+          stateId: 'yt_main_player_dialog',
+          onClose: () => {
+            try { document.title = 'Aardvark Playlist'; } catch(e) { window.document.title = 'Aardvark Playlist'; }
+            if (this.playEnforcer) clearInterval(this.playEnforcer);
+            if (this.fadeInterval) {
+              clearInterval(this.fadeInterval);
+              this.fadeInterval = null;
+              this.isFadingOut = false;
+            }
+            if (this.player.subtleProgressBar) {
+              this.player.subtleProgressBar.destroy();
+              this.player.subtleProgressBar = null;
+            }
+            this.player.gt?.handleTransportCleanup();
+            this.player.gt?.destroy();
+            this.player.gt = null;
+            VideoEventQueue.clear();
+            this.player.videoDialog = null;
+            this.player.viewportManager.destroy3DApp();
+            this.player._closeQuickSettingsDropdown();
+          },
+        });
+
+        this.player.headerControls = makeElement('div', {
+          className: 'gt-header-controls',
+          style: 'display:flex; align-items:center; gap:10px; margin-right:15px; font-family:sans-serif;',
+          onmousedown: (e) => e.stopPropagation(),
+        });
+
+        const controlsTarget = this.player.videoDialog.header.querySelector('.uw-controls');
+        if (controlsTarget) {
+          this.player.videoDialog.header.insertBefore(this.player.headerControls, controlsTarget);
+        } else {
+          this.player.videoDialog.header.appendChild(this.player.headerControls);
+        }
+
+        this.player.headerControlsUI.build();
+        this.player.videoDialog.setZOnTop();
+      } else {
+        if (this.player.videoDialog._minimized) {
+          this.player.videoDialog.restore();
+        }
+        this.player.videoDialog.setTitle(title);
+        this.player.videoDialog.setZOnTop();
+        this.player.videoDialog.element.style.display = 'flex';
+        this.player.videoContainer.innerHTML = '';
+        this.player.headerControlsUI.build();
+      }
+
+      this.player.gt = new GlowTunesPlayer(
+        this.player.videoContainer,
+        this.player.rootElement,
+        {
+          basePath: this.player.basePath,
+          initialSettings: this.player.state.settings,
+          startTime: item.startTime,
+          endTime: item.endTime,
+        }
+      );
+
+      this.player.subtleProgressBar = new SubtleProgressBar(this.player);
+      this.player.subtleProgressBar.mount(this.player.videoContainerWrapper);
+
+      if (this.player.state.geometry && this.player.gt.pianoVisuals) {
+        Object.assign(
+          this.player.gt.pianoVisuals.geometrySettings,
+          this.player.state.geometry
+        );
+      }
+
+      this.player.gt.onStateChange = (s) => this.handlePlayerState(s);
+      this.player.gt.registerTimeUpdateCallback((t, isPlaying, isReset) =>
+        this.onGlobalTimeUpdate(t, isPlaying)
+      );
+
+      let startTime = item.startTime || 0;
+      if (this.player.activeSegments) {
+        this.player.activeSegments.sort((a, b) => a.start - b.start);
+        startTime = this.player.activeSegments[0].start;
+      }
+
+      const skipVeq = this.player.state.settings.fetchPianoRolls === false;
+
+      // Immediately trigger playback enforcer so the video begins right away
+      this.ensurePlaybackStart();
+
+      this.player.gt.load(item.id, skipVeq ? 'SKIP' : null).then(() => {
+        if (startTime > 0) this.player.gt.seekTo(startTime);
+
+        const savedVol = this.player.state.settings.videoVolume;
+        if (savedVol !== undefined) {
+          this.player.gt.setVideoVolume(savedVol);
+        }
+
+        const veqData = window.VideoEventQueueClass?.current;
+        const hasNotes =
+          veqData &&
+          veqData.timedEvents &&
+          veqData.timedEvents.some((e) => e.type === 'note');
+
+        if (hasNotes) {
+          if (!item.hasPianoRoll) {
+            item.hasPianoRoll = true;
+            this.player._saveState();
+            this.player.playlistManager?.renderItems();
+          }
+
+          const s = item.songSettings || {};
+          if ((s.transpose === undefined || s.transpose === 0) && this.player.state.settings.smartAutoArp !== false) {
+            SmartArpController.applySmartRangeTransposition(this.player.gt, veqData);
+          }
+
+          if (s.tracks && this.player.gt.instruments) {
+            this.player.gt.instruments.setVolume(1.0);
+            this.player.gt.instruments.restoreTrackState(s.tracks);
+          }
+
+          const userTranspose = s.transpose || 0;
+          if (userTranspose !== 0) {
+            this.player.gt.setTranspose(userTranspose);
+          }
+          this.player.state.settings.transpose = this.player.gt.transposeOffset;
+
+          if (s.splitMethod) {
+            this.player.state.settings.splitPitch = s.splitPitch || 60;
+            this.player.pianoLogic.splitTracks(
+              s.splitMethod,
+              this.player.state.settings.splitPitch,
+              true
+            );
+          }
+
+          this.player._refreshVisuals();
+          if (this.player.gt.synchronizer) this.player.gt.synchronizer.resyncScheduler();
+        }
+
+        this.player.headerControlsUI.build();
+        const style = this.player.state.settings.keyboardStyle || '3d';
+        this.player._applyDisplayModeAfterLoad(style);
+      }).catch(err => {
+        console.warn('[PlaybackController] Video load error:', err);
+      });
+    }
   handlePlayerState(s) {
     const vp = this.player.gt?.videoPlayer;
     const ytVol = vp && vp.isReady ? Math.round(vp.getVolume()) : 'N/A';
@@ -457,52 +412,50 @@ class PlaybackController {
   }
 
   ensurePlaybackStart() {
-    if (this.playEnforcer) clearInterval(this.playEnforcer);
+      if (this.playEnforcer) clearInterval(this.playEnforcer);
 
-    let attempts = 0;
-    const maxAttempts = 20;
+      let attempts = 0;
+      const maxAttempts = 25;
 
-    this.playEnforcer = setInterval(() => {
-      attempts++;
+      this.playEnforcer = setInterval(() => {
+        attempts++;
 
-      if (!this.player.gt || !this.player.gt.videoPlayer) {
-        clearInterval(this.playEnforcer);
-        return;
-      }
+        if (!this.player.gt || !this.player.gt.videoPlayer) {
+          clearInterval(this.playEnforcer);
+          return;
+        }
 
-      const vp = this.player.gt.videoPlayer;
+        const vp = this.player.gt.videoPlayer;
 
-      if (vp.isPlaying()) {
-        clearInterval(this.playEnforcer);
-        return;
-      }
+        if (vp.isPlaying()) {
+          clearInterval(this.playEnforcer);
+          return;
+        }
 
-      if (attempts >= maxAttempts) {
-        this.player.setStatus('Auto-play timed out. Click Play.', '#f55');
-        clearInterval(this.playEnforcer);
-        return;
-      }
+        if (attempts >= maxAttempts) {
+          clearInterval(this.playEnforcer);
+          return;
+        }
 
-      if (vp.isReady) {
-        let isBuffering = false;
-        if (
-          vp.options.playerType === 'youtube' &&
-          vp.player &&
-          typeof vp.player.getPlayerState === 'function'
-        ) {
-          const state = vp.player.getPlayerState();
-          if (state === (window.YT?.PlayerState?.BUFFERING ?? 3)) {
-            isBuffering = true;
+        if (vp.isReady) {
+          let isBuffering = false;
+          if (
+            vp.options.playerType === 'youtube' &&
+            vp.player &&
+            typeof vp.player.getPlayerState === 'function'
+          ) {
+            const state = vp.player.getPlayerState();
+            if (state === (window.YT?.PlayerState?.BUFFERING ?? 3)) {
+              isBuffering = true;
+            }
+          }
+
+          if (!isBuffering) {
+            try { vp.play(); } catch(e) {}
           }
         }
-
-        if (!isBuffering) {
-          vp.play();
-        }
-      }
-    }, 500);
-  }
-
+      }, 400);
+    }
   startFadeOutAndStop() {
       if (this.isFadingOut) return;
       this.isFadingOut = true;

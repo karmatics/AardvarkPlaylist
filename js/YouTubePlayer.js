@@ -20,39 +20,45 @@ class YouTubePlayer {
   }
 
   constructor() {
-        this.gt = null;
-        this.playlistManager = null;
-        this.videoDialog = null;
-        this.stateManager = new AppStateManager(this);
-        this.fileIOManager = new FileIOManager(this);
-        this.coopManager = new CoopManager(this);
-        this.midiInputManager = new MidiInputManager(this);
-        this.keyboardEditController = new KeyboardEditController(this);
-        this.settingsDialogUI = new SettingsDialogUI(this);
-        this.viewportManager = new ViewportManager(this);
-        this.playbackController = new PlaybackController(this);
-        this.advancedToolsUI = new AdvancedToolsUI(this);
-        this.playlistSelectorUI = new PlaylistSelectorUI(this);
-        this.welcomeDialogUI = new WelcomeDialogUI(this);
-        this.state = this.stateManager.loadState();
-        this.basePath = './glowtunes/';
+      this.gt = null;
+      this.playlistManager = null;
+      this.videoDialog = null;
+      this.stateManager = new AppStateManager(this);
+      this.fileIOManager = new FileIOManager(this);
+      this.coopManager = new CoopManager(this);
+      this.midiInputManager = new MidiInputManager(this);
+      this.keyboardEditController = new KeyboardEditController(this);
+      this.settingsDialogUI = new SettingsDialogUI(this);
+      this.viewportManager = new ViewportManager(this);
+      this.playbackController = new PlaybackController(this);
+      this.advancedToolsUI = new AdvancedToolsUI(this);
+      this.playlistSelectorUI = new PlaylistSelectorUI(this);
+      this.welcomeDialogUI = new WelcomeDialogUI(this);
+      this.pianoLogic = new PianoRollController(this);
+      this.headerControlsUI = new HeaderControlsUI(this);
+      this.state = this.stateManager.loadState();
+      this.basePath = './glowtunes/';
 
-        // Playback Logic State
-        this.activeSegments = null;
-        this.currentSegmentIndex = -1;
+      // Playback Logic State
+      this.activeSegments = null;
+      this.currentSegmentIndex = -1;
 
-        // Initialized synchronously so extension commands are never blocked
-        this._isPlaylistLoaded = true;
-      }
+      // Initialized synchronously so extension commands are never blocked
+      this._isPlaylistLoaded = true;
+    }
+
   _buildLeftPanel() {
-    this.leftPanelUI = new LeftPanelUI(this);
-    this.leftPanelUI.build();
-  }
+      if (!this.leftPanel && typeof SidePanel !== 'undefined') {
+        this.leftPanel = new SidePanel('left', { parent: document.body });
+      }
+      this.leftPanelUI = new LeftPanelUI(this);
+      this.leftPanelUI.build();
+    }
 
   _buildRightPanel() {
-    this.DialogBoxClass = typeof UITools !== 'undefined' ? UITools : null;
-  }
-
+      this.rightPanel = null;
+      this.DialogBoxClass = typeof UITools !== 'undefined' ? UITools : null;
+    }
   _playVideo(item, index) {
     this.playbackController.playVideo(item, index);
   }
@@ -473,280 +479,114 @@ class YouTubePlayer {
           : null;
     }
 
-  init(targetElement) {
-          this.rootElement = targetElement || document.body;
-          window.player = this;
-          window.projectApp = this;
+  async init(container) {
+      this.rootElement = container || document.getElementById('app-container') || document.body;
+      this.container = this.rootElement;
 
-          this.DialogBoxClass = typeof UITools !== 'undefined' ? UITools : null;
+      // Remove loading boot screen if present
+      const loader = this.rootElement.querySelector('.aardvark-boot-loader');
+      if (loader) loader.remove();
 
-          window.smartLog = (cat, msg, data) => SmartLogger.log(cat, msg, data);
-          this._injectStyles();
-          this.pianoLogic = new PianoRollController(this);
-          this.headerControlsUI = new HeaderControlsUI(this);
+      if (!this.pianoLogic) this.pianoLogic = new PianoRollController(this);
+      if (!this.headerControlsUI) this.headerControlsUI = new HeaderControlsUI(this);
 
-          this.leftPanel = new SidePanel('left', 360, this.env);
-
-          this._buildLeftPanel();
-
-          GlowTunesKeys.initialize(this);
-          this._setupGlobalSyncKeys();
-
-          this._setupComms();
-          this._setupMidi();
-
-          this._createFloatingMenuButton();
-
-          this.curatorDiagnosticsUI = new CuratorDiagnosticsUI(this);
-          window.openCuratorDiagnostics = () => {
-            this.curatorDiagnosticsUI.open();
-          };
-
-          window.toggleSmartAutoArp = (enable) => {
-            this.state.settings.smartAutoArp = !!enable;
-            this._saveSettings();
-            console.log(`[SmartArp] smartAutoArp is now: ${!!enable}`);
-            if (this.smartArpDiagnosticsUI) this.smartArpDiagnosticsUI.refresh();
-          };
-
-          window.toggleSmartAutoArpViewport = (enable) => {
-            this.state.settings.smartAutoArpVerbose = !!enable;
-            this._saveSettings();
-            console.log(`[SmartArp] smartAutoArpVerbose is now: ${!!enable}`);
-            if (this.smartArpDiagnosticsUI) this.smartArpDiagnosticsUI.refresh();
-          };
-
-          window.clearPlaylistSettings = () => {
-            if (this.playlistManager && this.playlistManager.playlist) {
-              this.playlistManager.playlist.forEach(item => {
-                delete item.songSettings;
-                delete item.startTime;
-                delete item.endTime;
-              });
-              this.playlistManager.renderItems();
-              this._saveState();
-              this._sendSync();
-              console.log("[SmartArp] Cleared custom song settings, start times, and end times for all playlist items in memory.");
-              if (this.smartArpDiagnosticsUI) this.smartArpDiagnosticsUI.refresh();
-            }
-          };
-
-          window.openSmartArpDiagnostics = () => {
-            if (!this.smartArpDiagnosticsUI) {
-              this.smartArpDiagnosticsUI = new SmartArpDiagnosticsUI(this);
-            }
-            this.smartArpDiagnosticsUI.open();
-          };
-
-          window.addEventListener('webgl-context-restored', () => {
-            this.setStatus('Graphics memory reset. Restoring 3D Piano...', '#fa0');
-            const currentMode = this.state.settings.keyboardStyle || '3d';
-            this.setDisplayMode('2d');
-            setTimeout(() => {
-              this.setDisplayMode(currentMode);
-              this.setStatus('3D Piano Restored.', '#4f4');
-            }, 1000);
-          });
-
-          window.addEventListener('panel-toggle-complete', () => {
-            this._scheduleLayoutRefresh('panel-toggle-complete');
-          });
-
-          window.addEventListener('layout-safe-area-change', (e) => {
-            this._scheduleLayoutRefresh('layout-safe-area-change');
-          });
-
-          window.addEventListener('resize', () => {
-            SidePanel.updateGlobalSafeArea();
-            this._scheduleLayoutRefresh('window.resize');
-          });
-          SidePanel.updateGlobalSafeArea();
-
-          const update3DInteraction = (e) => {
-            const cvs = document.getElementById('canvas-container');
-            if (!cvs || cvs.style.display === 'none') return;
-
-            const modDown = e.metaKey || e.ctrlKey || e.altKey || e.shiftKey;
-            const isOrbiting = this.piano3DApp && this.piano3DApp.orbitModeActive;
-
-            if (modDown || isOrbiting) {
-              if (cvs.style.pointerEvents !== 'auto')
-                cvs.style.pointerEvents = 'auto';
-            } else {
-              if (cvs.style.pointerEvents !== 'none')
-                cvs.style.pointerEvents = 'none';
-            }
-          };
-
-          window.addEventListener('keydown', update3DInteraction, true);
-          window.addEventListener('keyup', update3DInteraction, true);
-          window.addEventListener('mousemove', update3DInteraction, true);
-          window.addEventListener('mousedown', update3DInteraction, true);
-          window.addEventListener('wheel', update3DInteraction, true);
-
-          window.addEventListener('blur', () => {
-            const cvs = document.getElementById('canvas-container');
-            if (cvs) cvs.style.pointerEvents = 'none';
-          });
-
-          window.addEventListener(
-            'wheel',
-            (e) => {
-              if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
-
-              if (this.piano3DApp && this.piano3DApp.orbitModeActive) return;
-
-              if (e.target && e.target.closest) {
-                if (
-                  e.target.closest('.yt-side-panel') ||
-                  e.target.closest('.yt-pill-ctrl')
-                )
-                  return;
-
-                const dialog = e.target.closest('.uw-dialog');
-                if (dialog) {
-                  const titleEl = dialog.querySelector('.uw-title');
-                  if (titleEl && !titleEl.textContent.startsWith('Video:')) {
-                    return;
-                  }
-                }
-              }
-
-              if (this.gt && this.gt.videoPlayer && this.gt.videoPlayer.isReady) {
-                e.preventDefault();
-                let vol = this.gt.videoPlayer.getVolume();
-                vol += e.deltaY < 0 ? 5 : -5;
-                vol = Math.max(0, Math.min(100, vol));
-                this.state.settings.videoVolume = vol;
-                this._saveState();
-                this.setStatus(`Volume: ${Math.round(vol)}%`, '#4f4');
-                if (this.leftPanelUI) this.leftPanelUI.refreshAudioUI();
-              }
-            },
-            { passive: false, capture: true }
-          );
-
-          document.addEventListener('fullscreenchange', () => {
-            if (!document.fullscreenElement) {
-              document.body.classList.remove('fullscreen-mode');
-              this.viewportManager.destroyFullscreenToolbar();
-            } else {
-              document.body.classList.add('fullscreen-mode');
-            }
-            SidePanel.updateGlobalSafeArea();
-            this._scheduleLayoutRefresh('fullscreenchange');
-            setTimeout(() => {
-              if (document.fullscreenElement) {
-                this.viewportManager.createFullscreenToolbar();
-              }
-            }, 600);
-          });
-
-          setTimeout(() => {
-            this._processUrlParameters();
-
-            this.stateManager.loadPlaylistAsync().then((playlistData) => {
-              if (playlistData && this.playlistManager) {
-                this.playlistManager.load(playlistData);
-                this.state.playlistData = playlistData;
-                if (this.playlistManager.playlist.length > 0) {
-                  if (!this.leftPanel.isOpen) {
-                    this.leftPanel.open('playlist');
-                    this._updateDockUI();
-                  }
-                }
-              } else if (!this.videoDialog) {
-                if (!this.leftPanel.isOpen) {
-                  this.leftPanel.open('playlist');
-                }
-              }
-
-              this._isPlaylistLoaded = true;
-              if (this.coopManager) {
-                if (typeof this.coopManager.flushPendingIncomingCommands === 'function') {
-                  this.coopManager.flushPendingIncomingCommands();
-                }
-                if (typeof this.coopManager.sendPlayerReady === 'function') {
-                  this.coopManager.sendPlayerReady();
-                }
-              }
-            });
-
-            if (!localStorage.getItem('aardvark_welcome_shown_v1')) {
-              localStorage.setItem('aardvark_welcome_shown_v1', 'true');
-              this._showWelcomeDialog();
-            }
-
-            if (localStorage.getItem('gt_smart_arp_diag_open') === 'true') {
-              window.openSmartArpDiagnostics();
-            }
-          }, 500);
-
-          return this;
-    }
-  async run(env) {
-      if (this.rootElement) {
-        this.destroy();
+      // Retrieve full saved state and persistent playlist asynchronously before UI build
+      const savedData = await this.stateManager.loadPlaylistAsync();
+      if (savedData && Array.isArray(savedData.playlist)) {
+        this.state.playlistData = savedData;
       }
 
-      // Save environment so we can pass it down to child UI components
-      this.env = env;
+      // Build Left Panel UI
+      this._buildLeftPanel();
+      this._buildRightPanel();
 
-      if (!env || !env.container) {
-        throw new Error("[Aardvark] run() requires an environment object with a valid container.");
+      // Inject Viewport & Global Styles
+      this.viewportManager.injectStyles();
+      this.viewportManager.createFloatingMenuButton();
+
+      // Setup global sync keys and shortcuts
+      if (typeof GlowTunesKeys !== 'undefined') {
+        GlowTunesKeys.initialize(this);
+      }
+      this.keyboardEditController.setupGlobalSyncKeys();
+      this.keyboardEditController.setupEditKeys();
+
+      // Setup communications
+      this.coopManager.setupComms();
+
+      // Setup Curator Diagnostics tool
+      if (typeof CuratorDiagnosticsUI !== 'undefined') {
+        this.curatorDiagnosticsUI = new CuratorDiagnosticsUI(this);
       }
 
-      const parentElement = env.container;
+      // Cross-tab broadcast listener for external playlist dispatchers
+      if (typeof window !== 'undefined' && !this._hasBroadcastListener) {
+        this._hasBroadcastListener = true;
+        if ('BroadcastChannel' in window) {
+          try {
+            const channel = new BroadcastChannel('aardvark_player_channel');
+            channel.onmessage = (event) => {
+              if (event.data && event.data.type === 'PLAY_VIDEO' && event.data.videoId) {
+                this.loadAndPlayVideoById(event.data.videoId, event.data.title || '', true);
+              }
+            };
+          } catch (e) {}
+        }
 
-      const containerId = 'yt-app-' + Math.random().toString(36).slice(2);
-      const appContainer = makeElement('div', {
-        id: containerId,
-        style: {
-          position: 'absolute',
-          top: '0',
-          left: '0',
-          right: '0',
-          bottom: '0',
-          overflow: 'hidden',
-        },
-      });
-      parentElement.appendChild(appContainer);
-      this.rootElement = appContainer;
+        window.addEventListener('message', (event) => {
+          if (event.data && event.data.type === 'PLAY_VIDEO' && event.data.videoId) {
+            this.loadAndPlayVideoById(event.data.videoId, event.data.title || '', true);
+          }
+        });
+      }
 
-      // Ensure layout recalculates gracefully when the container changes size (e.g. Vibes split pane)
+      // Load saved playlist into playlist manager if not already populated
+      if (savedData && savedData.playlist && savedData.playlist.length > 0 && this.playlistManager) {
+        this.playlistManager.load(savedData);
+      }
+
+      // Process query params (?v=... or ?pl=...)
+      await this.fileIOManager.processUrlParameters();
+
+      // If still empty, load starter playlist
       if (
-        !parentElement._vibesAppResizeObserver &&
-        typeof ResizeObserver !== 'undefined'
+        this.playlistManager &&
+        this.playlistManager.playlist.length === 0 &&
+        !this.state.settings.lastPlaylistUrl
       ) {
-        const ro = new ResizeObserver(() => {
-          if (typeof SidePanel !== 'undefined') SidePanel.updateGlobalSafeArea();
-          if (this._scheduleLayoutRefresh)
-            this._scheduleLayoutRefresh('container_resize_observer');
-        });
-        ro.observe(parentElement);
-        parentElement._vibesAppResizeObserver = ro;
+        await this.fileIOManager.fetchAndLoadPlaylist('./playlists/pianoSongs.txt', 'replace');
       }
 
-      this.init(appContainer);
+      this.coopManager.flushPendingIncomingCommands();
 
-      // Safe environment-based handshake
-      if (env && typeof env.requestKeystrokeControl === 'function') {
-        env.requestKeystrokeControl((active) => {
-          this.isKeystrokeCaptureActive = active;
-          if (typeof KeyCommandHandler !== 'undefined') {
-            KeyCommandHandler.setPaused(!active);
-          }
-          if (this.keyboardEditController && typeof this.keyboardEditController.setPaused === 'function') {
-            this.keyboardEditController.setPaused(!active);
-          }
-        });
-      } else {
-        this.isKeystrokeCaptureActive = true;
+      // Open left panel by default so library is visible on the left
+      if (this.leftPanel) {
+        this.leftPanel.open('playlist');
       }
+      this._updateDockUI();
 
-      return this;
+      if (typeof SidePanel !== 'undefined' && typeof SidePanel.updateGlobalSafeArea === 'function') {
+        SidePanel.updateGlobalSafeArea();
+      }
+      this._refreshVisuals(true);
     }
+  static async run(env) {
+      const container = (env && env.container) || document.getElementById("app-container") || document.body;
 
+      // Ensure Three.js is loaded if requested
+      if (typeof ThreeJSLoader !== "undefined" && typeof THREE === "undefined") {
+        try { await ThreeJSLoader.load(); } catch(e){}
+      }
+
+      const player = new YouTubePlayer();
+      window.player = player;
+      window.projectApp = player;
+
+      if (typeof player.init === "function") {
+        await player.init(container);
+      }
+      return player;
+    }
   
 
   destroy() {
@@ -912,7 +752,37 @@ class YouTubePlayer {
       : this.rootElement.clientHeight;
   }
 
-  
+  loadAndPlayVideoById(videoId, title = '', autoPlay = true) {
+      if (!videoId) return;
+      const cleanId = String(videoId).trim().replace(/[^a-zA-Z0-9_-]/g, '');
+      if (!cleanId) return;
+
+      const item = {
+        id: cleanId,
+        title: title || cleanId,
+        url: `https://www.youtube.com/watch?v=${cleanId}`,
+        videoSource: 'youtube'
+      };
+
+      if (this.playlistManager && Array.isArray(this.playlistManager.playlist)) {
+        const existingIdx = this.playlistManager.playlist.findIndex(v => v.id === cleanId);
+        if (existingIdx !== -1) {
+          this.playlistManager.currentIndex = existingIdx;
+          this.playbackController.playVideo(this.playlistManager.playlist[existingIdx], existingIdx);
+          return;
+        } else {
+          this.playlistManager.playlist.unshift(item);
+          this.playlistManager.currentIndex = 0;
+          this.playlistManager.renderItems();
+          this.playbackController.playVideo(item, 0);
+          return;
+        }
+      }
+
+      if (this.playbackController && this.playbackController.playVideo) {
+        this.playbackController.playVideo(item, 0);
+      }
+    }
 }
 
 globalThis.YouTubePlayer = YouTubePlayer;

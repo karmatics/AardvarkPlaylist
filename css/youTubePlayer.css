@@ -34,3 +34,103 @@ body {
   height: 100% !important;
   border: none !important;
 }
+
+/* Sidebar (LeftPanel) fixed layout, left docking and top-level z-index */
+.yt-side-panel {
+  position: fixed !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  width: 360px !important;
+  max-width: 90vw !important;
+  background: #161b22 !important;
+  color: #c9d1d9 !important;
+  border: none !important;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.6) !important;
+  z-index: 150000 !important;
+  pointer-events: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  overflow: hidden !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+.yt-side-panel.left {
+  left: 0 !important;
+  right: auto !important;
+  border-right: 1px solid #30363d !important;
+  transform: translateX(-100%);
+}
+
+.yt-side-panel.left.open,
+.yt-side-panel.open {
+  transform: translateX(0) !important;
+}
+
+.yt-side-panel .panel-content,
+.yt-side-panel .content-container,
+.yt-side-panel > div {
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+/* Suppress blocking scrims that darken or steal clicks from the sidebar */
+.yt-side-panel-scrim,
+.yt-side-panel-backdrop {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+/* Ensure canvas layers never block UI clicks */
+#canvas-container {
+  pointer-events: none !important;
+}
+#canvas-container canvas {
+  pointer-events: none !important;
+}
+
+/* Floating menu button */
+.floating-menu-btn {
+  z-index: 150001 !important;
+}
+
+/* Suppress obnoxious center pause icon/overlay on hover and playback */
+.ytp-bezel,
+.ytp-bezel-icon,
+.ytp-bezel-text,
+.ytp-pause-overlay,
+player-middle-controls:has(button[aria-label*="Pause"]),
+player-middle-controls:has(button[title*="Pause"]),
+.ytwPlayerMiddleControlsHost:has(button[aria-label*="Pause"]),
+.ytwPlayerMiddleControlsHost:has(button[title*="Pause"]),
+.ytwPlayerMiddleControlsHost:has(button[aria-label*="pause"]),
+.ytwPlayerMiddleControlsHost:has(button[title*="pause"]),
+.ytwPlayerMiddleControlsButton[aria-label*="Pause"],
+.ytwPlayerMiddleControlsButton[title*="Pause"],
+.ytwPlayerMiddleControlsButton[aria-label*="pause"],
+.ytwPlayerMiddleControlsButton[title*="pause"],
+.ytwPlayerMiddleControlsHost button[aria-label*="Pause"],
+.ytwPlayerMiddleControlsHost button[title*="Pause"] {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transition: none !important;
+}
+
+/* When paused, maintain a subtle play button */
+player-middle-controls:has(button[aria-label*="Play"]),
+player-middle-controls:has(button[title*="Play"]),
+.ytwPlayerMiddleControlsHost:has(button[aria-label*="Play"]),
+.ytwPlayerMiddleControlsHost:has(button[title*="Play"]),
+.ytwPlayerMiddleControlsButton[aria-label*="Play"],
+.ytwPlayerMiddleControlsButton[title*="Play"],
+.ytwPlayerMiddleControlsHost button[aria-label*="Play"],
+.ytwPlayerMiddleControlsHost button[title*="Play"] {
+  display: flex !important;
+  opacity: 0.65 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  transition: opacity 0.2s ease !important;
+}

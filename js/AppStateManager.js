@@ -5,63 +5,59 @@ class AppStateManager {
   }
 
   loadState() {
-    let settings = {
-      instrumentVolume: 50,
-      transpose: 0,
-      midiEnabled: false,
-      keyboardStyle: '3d', // Default to 3D strictly
-    };
-    let geometry = {};
+      let settings = {
+        instrumentVolume: 50,
+        transpose: 0,
+        midiEnabled: false,
+        keyboardStyle: '3d',
+      };
+      let geometry = {};
+      let playlistData = null;
 
-    try {
-      const loadedSettings = JSON.parse(localStorage.getItem('yt_settings'));
-      if (loadedSettings) {
-        settings = { ...settings, ...loadedSettings };
+      try {
+        const loadedSettings = JSON.parse(localStorage.getItem('yt_settings'));
+        if (loadedSettings) {
+          settings = { ...settings, ...loadedSettings };
+        }
+      } catch (e) {}
+
+      try {
+        const loadedGeo = JSON.parse(localStorage.getItem('yt_geometry'));
+        if (loadedGeo && Object.keys(loadedGeo).length > 0) geometry = loadedGeo;
+      } catch (e) {}
+
+      try {
+        const localPl = JSON.parse(localStorage.getItem('yt_playlist'));
+        if (localPl && Array.isArray(localPl.playlist)) {
+          playlistData = localPl;
+        }
+      } catch (e) {}
+
+      settings.editMode = false;
+      if (settings.keyboardStyle === 'both') {
+        settings.keyboardStyle = '3d';
       }
-    } catch (e) {}
 
-    try {
-      const loadedGeo = JSON.parse(localStorage.getItem('yt_geometry'));
-      if (loadedGeo && Object.keys(loadedGeo).length > 0) geometry = loadedGeo;
-    } catch (e) {}
-
-    try {
-      const old = JSON.parse(localStorage.getItem('yt_remote_data'));
-      if (old) {
-        if (old.settings) settings = { ...settings, ...old.settings };
-        if (old.geometry && Object.keys(geometry).length === 0) geometry = old.geometry;
-        if (old.windowGeo && Object.keys(geometry).length === 0) geometry = old.windowGeo;
-        localStorage.removeItem('yt_remote_data');
-      }
-    } catch (e) {}
-
-    settings.editMode = false;
-
-    // Eliminate "both"
-    if (settings.keyboardStyle === 'both') {
-      settings.keyboardStyle = '3d';
+      return { settings, playlistData, geometry };
     }
 
-    return { settings, playlistData: null, geometry };
-  }
-
   saveState() {
-    if (this._saveStateTimer) clearTimeout(this._saveStateTimer);
-    this._saveStateTimer = setTimeout(() => {
-      if (this.player.playlistManager) {
-        this.player.state.playlistData = this.player.playlistManager.getData();
-        if (this.player.state.settings.playlistModified) {
-          // Offload playlist arrays to indexedDB to keep localStorage footprint minimal
-          this._savePlaylistToDB(this.player.state.playlistData);
+      if (this._saveStateTimer) clearTimeout(this._saveStateTimer);
+      this._saveStateTimer = setTimeout(() => {
+        if (this.player.playlistManager) {
+          const pData = this.player.playlistManager.getData();
+          this.player.state.playlistData = pData;
+          this._savePlaylistToDB(pData);
+          try {
+            localStorage.setItem('yt_playlist', JSON.stringify(pData));
+          } catch (e) {}
         }
-      }
-      localStorage.setItem(
-        'yt_settings',
-        JSON.stringify(this.player.state.settings || {})
-      );
-    }, 300);
-  }
-
+        localStorage.setItem(
+          'yt_settings',
+          JSON.stringify(this.player.state.settings || {})
+        );
+      }, 250);
+    }
   saveGeometry() {
       if (this._saveGeoTimer) clearTimeout(this._saveGeoTimer);
       this._saveGeoTimer = setTimeout(() => {

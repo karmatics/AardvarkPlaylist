@@ -150,143 +150,141 @@ class LeftPanelUI {
   }
 
   _buildPlaylistControls(container) {
-    const timerBar = makeElement('div', {
-      style:
-        'display:flex; align-items:center; gap:8px; margin-bottom:10px; padding:6px; background:#222; border-radius:4px; border:1px solid #333;',
-    });
-
-    // Mode Select (Renamed Stop After to Stop at End)
-    const pbSelect = makeElement('select', {
-      style:
-        'flex:1; font-size:10px; background:#111; color:#eee; border:1px solid #444; padding:2px;',
-      title: 'Choose what happens when the video ends.',
-      onchange: (e) => {
-        const val = e.target.value;
-        this.player.state.settings.playbackMode = val;
-
-        if (val !== 'timer') {
-          this.player.state.settings.playbackStopTime = null;
-        } else {
-          this.player.state.settings.playbackStopTime = Date.now() + 30 * 60000;
-        }
-        this.player._saveState();
-        this.build();
-      },
-    });
-
-    [
-      { v: 'continuous', l: 'Loop / Play Next' },
-      { v: 'stop_one', l: 'Stop at End' },
-      { v: 'timer', l: 'Stop on Timer...' },
-    ].forEach((m) => {
-      const opt = makeElement('option', { value: m.v }, m.l);
-      if (this.player.state.settings.playbackMode === m.v) opt.selected = true;
-      pbSelect.appendChild(opt);
-    });
-
-    timerBar.appendChild(pbSelect);
-
-    if (this.player.state.settings.playbackMode === 'timer') {
-      const minInput = makeElement('input', {
-        type: 'number',
-        value: '30',
+      const timerBar = makeElement('div', {
         style:
-          'width:30px; font-size:10px; background:#111; color:#fff; border:1px solid #444; padding:2px; text-align:center;',
+          'display:flex; align-items:center; gap:8px; margin-bottom:10px; padding:6px; background:#222; border-radius:4px; border:1px solid #333;',
       });
 
-      const setBtn = makeElement(
-        'button',
-        {
-          className: 'dialog-button',
-          style: 'padding:2px 6px; font-size:9px;',
-          onclick: () => {
-            const m = parseInt(minInput.value) || 30;
-            this.player.state.settings.playbackStopTime =
-              Date.now() + m * 60000;
-            this.player._saveState();
-            updateCountdown();
-          },
-        },
-        'Set'
-      );
+      const pbSelect = makeElement('select', {
+        style:
+          'flex:1; font-size:10px; background:#111; color:#eee; border:1px solid #444; padding:2px;',
+        title: 'Choose what happens when the video ends.',
+        onchange: (e) => {
+          const val = e.target.value;
+          this.player.state.settings.playbackMode = val;
 
-      const countdownDisplay = makeElement(
-        'div',
-        {
+          if (val !== 'timer') {
+            this.player.state.settings.playbackStopTime = null;
+          } else {
+            this.player.state.settings.playbackStopTime = Date.now() + 30 * 60000;
+          }
+          this.player._saveState();
+          this.build();
+        },
+      });
+
+      [
+        { v: 'continuous', l: 'Loop / Play Next' },
+        { v: 'stop_one', l: 'Stop at End' },
+        { v: 'timer', l: 'Stop on Timer...' },
+      ].forEach((m) => {
+        const opt = makeElement('option', { value: m.v }, m.l);
+        if (this.player.state.settings.playbackMode === m.v) opt.selected = true;
+        pbSelect.appendChild(opt);
+      });
+
+      timerBar.appendChild(pbSelect);
+
+      if (this.player.state.settings.playbackMode === 'timer') {
+        const minInput = makeElement('input', {
+          type: 'number',
+          value: '30',
           style:
-            'font-size:10px; color:#4f4; font-family:monospace; min-width:40px; text-align:right;',
-        },
-        '--:--'
-      );
+            'width:30px; font-size:10px; background:#111; color:#fff; border:1px solid #444; padding:2px; text-align:center;',
+        });
 
-      const updateCountdown = () => {
-        const stopTime = this.player.state.settings.playbackStopTime;
-        if (!stopTime) {
-          countdownDisplay.textContent = 'OFF';
-          countdownDisplay.style.color = '#888';
-          return;
-        }
-        const diff = stopTime - Date.now();
-        if (diff <= 0) {
-          countdownDisplay.textContent = '00:00';
-          countdownDisplay.style.color = '#f55';
-        } else {
-          const mins = Math.floor(diff / 60000);
-          const secs = Math.floor((diff % 60000) / 1000);
-          countdownDisplay.textContent = `${mins}:${secs
-            .toString()
-            .padStart(2, '0')}`;
-          countdownDisplay.style.color = '#4f4';
-        }
-      };
+        const setBtn = makeElement(
+          'button',
+          {
+            className: 'dialog-button',
+            style: 'padding:2px 6px; font-size:9px;',
+            onclick: () => {
+              const m = parseInt(minInput.value) || 30;
+              this.player.state.settings.playbackStopTime =
+                Date.now() + m * 60000;
+              this.player._saveState();
+              updateCountdown();
+            },
+          },
+          'Set'
+        );
 
-      updateCountdown();
-      if (this._timerInterval) clearInterval(this._timerInterval);
-      this._timerInterval = setInterval(updateCountdown, 1000);
+        const countdownDisplay = makeElement(
+          'div',
+          {
+            style:
+              'font-size:10px; color:#4f4; font-family:monospace; min-width:40px; text-align:right;',
+          },
+          '--:--'
+        );
 
-      timerBar.append(
-        minInput,
-        makeElement('span', { style: 'font-size:9px;color:#888' }, 'm'),
-        setBtn,
-        countdownDisplay
-      );
-    }
+        const updateCountdown = () => {
+          const stopTime = this.player.state.settings.playbackStopTime;
+          if (!stopTime) {
+            countdownDisplay.textContent = 'OFF';
+            countdownDisplay.style.color = '#888';
+            return;
+          }
+          const diff = stopTime - Date.now();
+          if (diff <= 0) {
+            countdownDisplay.textContent = '00:00';
+            countdownDisplay.style.color = '#f55';
+          } else {
+            const mins = Math.floor(diff / 60000);
+            const secs = Math.floor((diff % 60000) / 1000);
+            countdownDisplay.textContent = `${mins}:${secs
+              .toString()
+              .padStart(2, '0')}`;
+            countdownDisplay.style.color = '#4f4';
+          }
+        };
 
-    container.appendChild(timerBar);
+        updateCountdown();
+        if (this._timerInterval) clearInterval(this._timerInterval);
+        this._timerInterval = setInterval(updateCountdown, 1000);
 
-    const listWrapper = makeElement('div', {
-      style: 'flex:1; display:flex; flex-direction:column; min-height:200px;',
-    });
-    container.appendChild(listWrapper);
-
-    let initialUrl = this.player.state.settings.lastPlaylistUrl;
-
-    this.player.playlistManager = new Playlist(listWrapper, {
-      initialUrl: initialUrl || '',
-      playlistSelectorUI: this.player.playlistSelectorUI,
-      onPlay: (item, index) => this.player._playVideo(item, index),
-      onLoopToggle: () => this.player._saveState(),
-      onPlaylistChange: () => {
-        if (!this.player._isLoadingPlaylist && this.player.playlistSelectorUI) {
-          this.player.playlistSelectorUI.markModified();
-        }
-        this.player._saveState();
-        this.player._sendSync();
-      },
-      onLoadUrl: (url) => this.player._fetchAndLoadPlaylist(url),
-      onCloudSave: () => this.player._savePlaylistToCloud(),
-      onImportFile: () => this.player._importPlaylist(),
-    });
-
-    if (this.player.state.settings.playlistModified) {
-      if (this.player.state.playlistData) {
-        this.player.playlistManager.load(this.player.state.playlistData);
+        timerBar.append(
+          minInput,
+          makeElement('span', { style: 'font-size:9px;color:#888' }, 'm'),
+          setBtn,
+          countdownDisplay
+        );
       }
-    } else if (initialUrl) {
-      this.player._fetchAndLoadPlaylist(initialUrl, 'replace');
-    }
-  }
 
+      container.appendChild(timerBar);
+
+      const listWrapper = makeElement('div', {
+        style: 'flex:1; display:flex; flex-direction:column; min-height:200px;',
+      });
+      container.appendChild(listWrapper);
+
+      let initialUrl = this.player.state.settings.lastPlaylistUrl;
+
+      this.player.playlistManager = new Playlist(listWrapper, {
+        initialUrl: initialUrl || '',
+        playlistSelectorUI: this.player.playlistSelectorUI,
+        onPlay: (item, index) => this.player._playVideo(item, index),
+        onLoopToggle: () => this.player._saveState(),
+        onPlaylistChange: () => {
+          if (!this.player._isLoadingPlaylist && this.player.playlistSelectorUI) {
+            this.player.playlistSelectorUI.markModified();
+          }
+          this.player._saveState();
+          this.player._sendSync();
+        },
+        onLoadUrl: (url) => this.player._fetchAndLoadPlaylist(url),
+        onCloudSave: () => this.player._savePlaylistToCloud(),
+        onImportFile: () => this.player._importPlaylist(),
+      });
+
+      // Restore cached playlist data synchronously if available
+      const cachedData = this.player.state.playlistData;
+      if (cachedData && Array.isArray(cachedData.playlist) && cachedData.playlist.length > 0) {
+        this.player.playlistManager.load(cachedData);
+      } else if (initialUrl && !this.player.state.settings.playlistModified) {
+        this.player._fetchAndLoadPlaylist(initialUrl, 'replace');
+      }
+    }
   _renderMasterControls(container) {
     const fileRow = makeElement('div', {
       style: 'display:flex; gap:5px; margin-bottom:10px;',
