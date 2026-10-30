@@ -1,36 +1,34 @@
-
 class Playlist {
-  
-
   constructor(containerElement, callbacks = {}) {
-      this.container = containerElement;
-      this.onPlayCallback = callbacks.onPlay || (() => {});
-      this.onPlaylistChange = callbacks.onPlaylistChange || (() => {});
+    this.container = containerElement;
+    this.onPlayCallback = callbacks.onPlay || (() => {});
+    this.onPlaylistChange = callbacks.onPlaylistChange || (() => {});
 
-      this.onLoadUrl = callbacks.onLoadUrl || (() => {});
-      this.onCloudSave = callbacks.onCloudSave || (() => {});
-      this.onImportFile = callbacks.onImportFile || (() => {});
+    this.onLoadUrl = callbacks.onLoadUrl || (() => {});
+    this.onCloudSave = callbacks.onCloudSave || (() => {});
+    this.onImportFile = callbacks.onImportFile || (() => {});
 
-      this.initialUrl = callbacks.initialUrl || '';
-      this.playlistSelectorUI = callbacks.playlistSelectorUI || null;
+    this.initialUrl = callbacks.initialUrl || '';
+    this.playlistSelectorUI = callbacks.playlistSelectorUI || null;
 
-      this.playlist = [];
-      this.currentIndex = -1;
-      this.veqCache = {};
-      this._searchQuery = ''; // State tracking for real-time list filtering
+    this.playlist = [];
+    this.currentIndex = -1;
+    this.veqCache = {};
+    this._searchQuery = '';
 
-      this._render();
-    }
+    this._render();
+  }
 
   load(data) {
-      if (!data) return;
-      if (Array.isArray(data.playlist)) this.playlist = data.playlist;
-      if (typeof data.index === 'number' && data.index >= 0 && data.index < this.playlist.length) {
-        this.currentIndex = data.index;
-      }
-      this.renderItems();
-      this.scrollToCurrent();
+    if (!data) return;
+    if (Array.isArray(data.playlist)) this.playlist = data.playlist;
+    if (typeof data.index === 'number' && data.index >= 0 && data.index < this.playlist.length) {
+      this.currentIndex = data.index;
     }
+    this.renderItems();
+    this.scrollToCurrent();
+  }
+
   getData() {
     return {
       playlist: this.playlist.filter((v) => !v.playOnce),
@@ -39,67 +37,60 @@ class Playlist {
   }
 
   add(id, title, playOnce = false, forceTop = false, position = null) {
-      const cleanId = id.trim();
-      const existingIndex = this.playlist.findIndex((v) => v.id === cleanId);
+    const cleanId = id.trim();
+    const existingIndex = this.playlist.findIndex((v) => v.id === cleanId);
 
-      if (existingIndex !== -1) {
-        const existing = this.playlist[existingIndex];
-        if (!playOnce && existing.playOnce) {
-          existing.playOnce = false;
-          this.renderItems();
-          this.onPlaylistChange();
+    if (existingIndex !== -1) {
+      const existing = this.playlist[existingIndex];
+      if (!playOnce && existing.playOnce) {
+        existing.playOnce = false;
+        this.renderItems();
+        this.onPlaylistChange();
+      }
+      if ((position === 'top' || forceTop) && existingIndex !== 0) {
+        this.playlist.splice(existingIndex, 1);
+        this.playlist.unshift(existing);
+        if (this.currentIndex === existingIndex) {
+          this.currentIndex = 0;
+        } else if (this.currentIndex >= 0 && this.currentIndex < existingIndex) {
+          this.currentIndex++;
         }
-        if ((position === 'top' || forceTop) && existingIndex !== 0) {
-          this.playlist.splice(existingIndex, 1);
-          this.playlist.unshift(existing);
-          if (this.currentIndex === existingIndex) {
-            this.currentIndex = 0;
-          } else if (
-            this.currentIndex >= 0 &&
-            this.currentIndex < existingIndex
-          ) {
-            this.currentIndex++;
-          }
-          this.renderItems();
-          this.onPlaylistChange();
-          return 0;
-        }
-        return existingIndex;
+        this.renderItems();
+        this.onPlaylistChange();
+        return 0;
       }
-
-      const item = {
-        id: cleanId,
-        title: title || 'Unknown Video',
-        playOnce: !!playOnce,
-      };
-
-      let insertIndex;
-      if (position === 'top' || forceTop) {
-        insertIndex = 0;
-      } else if (
-        position === 'next' ||
-        (this.playlist.length > 0 &&
-          this.currentIndex >= 0 &&
-          this.currentIndex < this.playlist.length)
-      ) {
-        // Insert immediately AFTER current video
-        insertIndex = this.currentIndex + 1;
-      } else {
-        // Top of list if nothing is playing
-        insertIndex = 0;
-      }
-
-      this.playlist.splice(insertIndex, 0, item);
-
-      if (insertIndex <= this.currentIndex) {
-        this.currentIndex++;
-      }
-
-      this.renderItems();
-      this.onPlaylistChange();
-
-      return insertIndex;
+      return existingIndex;
     }
+
+    const item = {
+      id: cleanId,
+      title: title || 'Unknown Video',
+      playOnce: !!playOnce,
+    };
+
+    let insertIndex;
+    if (position === 'top' || forceTop) {
+      insertIndex = 0;
+    } else if (
+      position === 'next' ||
+      (this.playlist.length > 0 && this.currentIndex >= 0 && this.currentIndex < this.playlist.length)
+    ) {
+      insertIndex = this.currentIndex + 1;
+    } else {
+      insertIndex = 0;
+    }
+
+    this.playlist.splice(insertIndex, 0, item);
+
+    if (insertIndex <= this.currentIndex) {
+      this.currentIndex++;
+    }
+
+    this.renderItems();
+    this.onPlaylistChange();
+
+    return insertIndex;
+  }
 
   remove(index) {
     if (index < 0 || index >= this.playlist.length) return;
@@ -136,7 +127,6 @@ class Playlist {
     if (this.playlist.length < 2) return;
     const currentVideo = this.playlist[this.currentIndex];
 
-    // Smart Shuffle: Separate into "With Piano Roll" and "Without"
     const withPR = [];
     const withoutPR = [];
 
@@ -155,13 +145,10 @@ class Playlist {
     shuffleArray(withPR);
     shuffleArray(withoutPR);
 
-    // Recombine prioritizing PR videos first
     this.playlist = [...withPR, ...withoutPR];
 
     if (currentVideo) {
-      this.currentIndex = this.playlist.findIndex(
-        (v) => v.id === currentVideo.id
-      );
+      this.currentIndex = this.playlist.findIndex((v) => v.id === currentVideo.id);
     }
     this.renderItems();
     this.scrollToCurrent();
@@ -182,33 +169,31 @@ class Playlist {
   }
 
   playNext() {
-      const q = this._searchQuery || '';
-      if (q) {
-        const filtered = this.getFilteredIndices();
-        if (filtered.length === 0) return false;
+    const q = this._searchQuery || '';
+    if (q) {
+      const filtered = this.getFilteredIndices();
+      if (filtered.length === 0) return false;
 
-        const currentPos = filtered.indexOf(this.currentIndex);
-        if (currentPos !== -1 && currentPos < filtered.length - 1) {
-          this._triggerPlay(filtered[currentPos + 1]);
-          return true;
-        } else if (filtered.length > 0) {
-          // Loop back to start of search filtered subset
-          this._triggerPlay(filtered[0]);
-          return true;
-        }
-        return false;
-      }
-
-      // Normal non-filtered sequential playback
-      if (this.currentIndex < this.playlist.length - 1) {
-        this._triggerPlay(this.currentIndex + 1);
+      const currentPos = filtered.indexOf(this.currentIndex);
+      if (currentPos !== -1 && currentPos < filtered.length - 1) {
+        this._triggerPlay(filtered[currentPos + 1]);
         return true;
-      } else if (this.playlist.length > 0) {
-        this._triggerPlay(0);
+      } else if (filtered.length > 0) {
+        this._triggerPlay(filtered[0]);
         return true;
       }
       return false;
     }
+
+    if (this.currentIndex < this.playlist.length - 1) {
+      this._triggerPlay(this.currentIndex + 1);
+      return true;
+    } else if (this.playlist.length > 0) {
+      this._triggerPlay(0);
+      return true;
+    }
+    return false;
+  }
 
   _triggerPlay(index) {
     if (index >= 0 && index < this.playlist.length) {
@@ -216,7 +201,6 @@ class Playlist {
       this.setCurrentIndex(index);
       this.onPlayCallback(item, index);
 
-      // If item is set to play only once (temporary), remove it after triggering play
       if (item.playOnce) {
         this.remove(index);
       }
@@ -239,381 +223,510 @@ class Playlist {
   }
 
   _renderToolbar() {
-      this.toolbar.innerHTML = '';
-      this.toolbar.style.flexDirection = 'column';
-      this.toolbar.style.gap = '6px';
+    this.toolbar.innerHTML = '';
+    this.toolbar.style.flexDirection = 'column';
+    this.toolbar.style.gap = '6px';
 
-      const topRow = makeElement('div', {
-        style: 'display:flex; gap:6px; width:100%; align-items:center;',
-      });
+    const topRow = makeElement('div', {
+      style: 'display:flex; gap:6px; width:100%; align-items:center;',
+    });
 
-      if (this.playlistSelectorUI) {
-        const plSelect = this.playlistSelectorUI.createDropdown();
-        topRow.appendChild(plSelect);
-      }
-
-      // Trimmed down the sort select width and changed label to a simple "Sort..."
-      const sortSelect = makeElement('select', {
-        style: 'background:#111; color:#ccc; border:1px solid #444; font-size:10px; padding:4px; border-radius:4px; cursor:pointer; max-width:62px; flex:0 0 62px;',
-      });
-
-      [
-        { v: '', l: 'Sort...' },
-        { v: 'shuffle', l: '🔀 Shuffle' },
-        { v: 'sort_1', l: 'Sort: Title' },
-        { v: 'sort_2', l: 'Sort: Song' },
-      ].forEach((opt) => {
-        sortSelect.appendChild(makeElement('option', { value: opt.v }, opt.l));
-      });
-
-      sortSelect.onchange = (e) => {
-        const v = e.target.value;
-        if (v === 'shuffle') this.shuffle();
-        else if (v === 'sort_1') this._sortPlaylist(true);
-        else if (v === 'sort_2') this._sortPlaylist(false);
-        e.target.value = ''; // Reset selector
-      };
-      topRow.appendChild(sortSelect);
-
-      // Trimmed down padding and size of the Backup Manager button so it fits without hanging off
-      const fileBtn = makeElement('button', {
-        className: 'dialog-button',
-        title: 'Import / Export & Backup Manager (Playlists & Piano Rolls)',
-        style: 'padding: 4px 6px; font-size: 12px; display:flex; align-items:center; justify-content:center; flex: 0 0 24px; height: 21px;',
-        onclick: () => this.openImportExportDialog(),
-      }, '📂');
-      topRow.appendChild(fileBtn);
-
-      const urlRow = makeElement('div', {
-        style: 'display:flex; gap:6px; width:100%; align-items:center;',
-      });
-
-      const urlInput = makeElement('input', {
-        placeholder: 'YouTube URL, ID, or Playlist...',
-        value: this.initialUrl,
-        style: 'flex:1; font-size:10px; background:#000; color:#fff; border:1px solid #444; padding:4px 6px; border-radius:4px;',
-        onkeydown: (e) => {
-          e.stopPropagation();
-        }
-      });
-
-      const executeLoad = async (text) => {
-        if (!text) return;
-        let trimmed = text.trim();
-
-        if (trimmed.includes('.') && !trimmed.startsWith('http') && !trimmed.includes(' ')) {
-          if (/^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(\/.*)?$/.test(trimmed)) {
-            trimmed = 'https://' + trimmed;
-          }
-        }
-
-        const lines = trimmed.split(/\r?\n/).filter((l) => l.trim());
-
-        if (lines.length > 1) {
-          let count = 0;
-          lines.forEach((l) => {
-            const parts = l.trim().split(' ');
-            const videoId = this._parseYoutubeId(parts[0]);
-            if (videoId) {
-              this.add(videoId, parts.slice(1).join(' ') || videoId);
-              count++;
-            }
-          });
-          return;
-        }
-
-        const id = this._parseYoutubeId(trimmed);
-
-        if (trimmed.endsWith('.json') || trimmed.endsWith('.txt') || trimmed.includes('/playlists/') || trimmed.startsWith('http')) {
-          this.onLoadUrl(trimmed);
-        } else if (id) {
-          loadBtn.textContent = '...';
-          const title = await this._fetchVideoTitle(id);
-          this.add(id, title || 'Video ' + id);
-          loadBtn.textContent = 'Load';
-        } else {
-          this.onLoadUrl(trimmed);
-        }
-      };
-
-      urlInput.onkeydown = (e) => {
-        e.stopPropagation();
-        if (e.key === 'Enter') {
-          executeLoad(urlInput.value);
-          urlInput.value = '';
-        }
-      };
-
-      const loadBtn = makeElement('button', {
-        className: 'dialog-button primary',
-        onclick: () => {
-          if (urlInput.value) {
-            executeLoad(urlInput.value);
-            urlInput.value = '';
-          }
-        },
-      }, 'Load');
-
-      const pasteBtn = makeElement('button', {
-        className: 'dialog-button',
-        title: 'Paste and Load',
-        style: 'padding: 4px; font-size: 12px; display: flex; align-items: center; justify-content: center;',
-        onclick: async () => {
-          try {
-            const text = await navigator.clipboard.readText();
-            if (!text) return;
-            urlInput.value = text;
-            loadBtn.style.transform = 'scale(1.05)';
-            loadBtn.style.filter = 'brightness(1.5)';
-            setTimeout(() => {
-              loadBtn.style.transform = 'scale(1)';
-              loadBtn.style.filter = 'none';
-              executeLoad(text);
-              urlInput.value = '';
-            }, 400);
-          } catch (e) {
-            alert('Could not read clipboard. Please use Ctrl+V in the text box.');
-          }
-        },
-      }, '📋');
-
-      urlRow.append(pasteBtn, urlInput, loadBtn);
-
-      const searchInput = makeElement('input', {
-        placeholder: '🔍 Search / Jump to song...',
-        value: this._searchQuery,
-        style: 'width:100%; font-size:10px; background:#000; color:#fff; border:1px solid #444; padding:4px 6px; border-radius:4px;',
-        onkeydown: (e) => {
-          e.stopPropagation();
-        },
-        oninput: (e) => {
-          this._searchQuery = e.target.value.toLowerCase().trim();
-          this.renderItems();
-
-          if (this._searchQuery) {
-            const idx = this.playlist.findIndex(v => (v.title || '').toLowerCase().includes(this._searchQuery) || v.id.toLowerCase().includes(this._searchQuery));
-            let isPlaying = false;
-            const player = window.projectApp;
-            if (player && player.gt && player.gt.videoPlayer) {
-              isPlaying = player.gt.videoPlayer.isPlaying();
-            }
-            if (!isPlaying && idx !== -1 && idx !== this.currentIndex) {
-              this._triggerPlay(idx);
-            }
-          }
-        }
-      });
-
-      this.toolbar.append(topRow, urlRow, searchInput);
+    if (this.playlistSelectorUI) {
+      const plSelect = this.playlistSelectorUI.createDropdown();
+      topRow.appendChild(plSelect);
     }
 
-  renderItems() {
-      if (this.playlist.length === 0) {
-        this.listElement.innerHTML = '';
-        this.listElement.appendChild(
-          makeElement(
-            'div',
-            {
-              style: { padding: '20px', color: '#999', textAlign: 'center' },
-            },
-            'No videos. Paste URL or drop file.'
-          )
-        );
+    const sortSelect = makeElement('select', {
+      style: 'background:#111; color:#ccc; border:1px solid #444; font-size:10px; padding:4px; border-radius:4px; cursor:pointer; max-width:62px; flex:0 0 62px;',
+    });
+
+    [
+      { v: '', l: 'Sort...' },
+      { v: 'shuffle', l: '🔀 Shuffle' },
+      { v: 'sort_1', l: 'Sort: Title' },
+      { v: 'sort_2', l: 'Sort: Song' },
+    ].forEach((opt) => {
+      sortSelect.appendChild(makeElement('option', { value: opt.v }, opt.l));
+    });
+
+    sortSelect.onchange = (e) => {
+      const v = e.target.value;
+      if (v === 'shuffle') this.shuffle();
+      else if (v === 'sort_1') this._sortPlaylist(true);
+      else if (v === 'sort_2') this._sortPlaylist(false);
+      e.target.value = '';
+    };
+    topRow.appendChild(sortSelect);
+
+    const fileBtn = makeElement('button', {
+      className: 'dialog-button',
+      title: 'Import / Export & Backup Manager (Playlists & Piano Rolls)',
+      style: 'padding: 4px 6px; font-size: 12px; display:flex; align-items:center; justify-content:center; flex: 0 0 24px; height: 21px;',
+      onclick: () => this.openImportExportDialog(),
+    }, '📂');
+    topRow.appendChild(fileBtn);
+
+    const urlRow = makeElement('div', {
+      style: 'display:flex; gap:6px; width:100%; align-items:center;',
+    });
+
+    const urlInput = makeElement('input', {
+      placeholder: 'YouTube URL, ID, or Playlist...',
+      value: this.initialUrl,
+      style: 'flex:1; font-size:10px; background:#000; color:#fff; border:1px solid #444; padding:4px 6px; border-radius:4px;',
+      onkeydown: (e) => {
+        e.stopPropagation();
+      }
+    });
+
+    const executeLoad = async (text) => {
+      if (!text) return;
+      let trimmed = text.trim();
+
+      // Normalize bare domains (e.g. example.com/playlist.txt)
+      if (trimmed.includes('.') && !trimmed.startsWith('http') && !trimmed.includes(' ') && !/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
+        if (/^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(\/.*)?$/.test(trimmed)) {
+          trimmed = 'https://' + trimmed;
+        }
+      }
+
+      // 1. Check for multiline input first
+      const lines = trimmed.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      if (lines.length > 1) {
+        let count = 0;
+        for (const l of lines) {
+          const vidInfo = Playlist.extractVideoInfo(l);
+          if (vidInfo && vidInfo.id) {
+            this.add(vidInfo.id, vidInfo.title || vidInfo.id, false, false, 'bottom');
+            count++;
+          }
+        }
+        if (count > 0) {
+          window.projectApp?.setStatus(`Added ${count} videos to playlist`, '#4f4');
+          return;
+        }
+      }
+
+      // 2. SMART YOUTUBE DETECTION:
+      // Even if user thinks they are pasting a playlist URL, if it contains or matches a video,
+      // prioritize loading the video directly instead of letting fetch() crash on youtube.com!
+      const vidInfo = Playlist.extractVideoInfo(trimmed);
+      if (vidInfo && vidInfo.id) {
+        loadBtn.textContent = '...';
+        await this.addVideoAndPlay(vidInfo);
+        loadBtn.textContent = 'Load';
         return;
       }
 
-      if (
-        this.listElement.firstChild &&
-        !this.listElement.firstChild.classList?.contains('pl-item')
-      ) {
-        this.listElement.innerHTML = '';
+      // 3. True playlist file (.txt, .json, or relative /playlists/)
+      if (trimmed.endsWith('.json') || trimmed.endsWith('.txt') || trimmed.includes('/playlists/')) {
+        this.onLoadUrl(trimmed);
+      } else if (trimmed.startsWith('http')) {
+        this.onLoadUrl(trimmed);
+      } else {
+        window.projectApp?.setStatus('Could not recognize video or playlist URL.', '#fa0');
       }
+    };
 
-      const existingNodes = Array.from(this.listElement.children);
-      const q = this._searchQuery || '';
-
-      // Check if video is actually playing right now
-      let isPlaying = false;
-      const player = window.projectApp;
-      if (player && player.gt && player.gt.videoPlayer) {
-        isPlaying = player.gt.videoPlayer.isPlaying();
+    urlInput.onkeydown = (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') {
+        executeLoad(urlInput.value);
+        urlInput.value = '';
       }
+    };
 
-      this.playlist.forEach((vid, index) => {
-        const isActive = index === this.currentIndex;
-        const isTemp = !!vid.playOnce;
-        const isUrl = vid.id.includes('/') || vid.id.includes('.');
-
-        // Filter: Hide elements that don't match, unless they are currently playing
-        let matchesSearch = true;
-        if (q) {
-          const titleMatch = (vid.title || '').toLowerCase().includes(q);
-          const idMatch = vid.id.toLowerCase().includes(q);
-          matchesSearch = titleMatch || idMatch;
+    const loadBtn = makeElement('button', {
+      className: 'dialog-button primary',
+      onclick: () => {
+        if (urlInput.value) {
+          executeLoad(urlInput.value);
+          urlInput.value = '';
         }
+      },
+    }, 'Load');
 
-        const shouldShow = matchesSearch || (isActive && isPlaying);
+    const pasteBtn = makeElement('button', {
+      className: 'dialog-button',
+      title: 'Paste and Load (YouTube URL, ID, or Playlist)',
+      style: 'padding: 4px; font-size: 12px; display: flex; align-items: center; justify-content: center;',
+      onclick: async () => {
+        try {
+          const text = await navigator.clipboard.readText();
+          if (!text) return;
+          urlInput.value = text;
+          loadBtn.style.transform = 'scale(1.05)';
+          loadBtn.style.filter = 'brightness(1.5)';
+          setTimeout(() => {
+            loadBtn.style.transform = 'scale(1)';
+            loadBtn.style.filter = 'none';
+            executeLoad(text);
+            urlInput.value = '';
+          }, 300);
+        } catch (e) {
+          alert('Could not read clipboard. Please paste directly into the box.');
+        }
+      },
+    }, '📋');
 
-        let node = existingNodes[index];
+    urlRow.append(pasteBtn, urlInput, loadBtn);
 
-        if (node && node.dataset.id === vid.id) {
-          node.className = `pl-item ${isActive ? 'active' : ''} ${
-            isTemp ? 'is-temp' : ''
-          }`;
-          node.style.display = shouldShow ? 'flex' : 'none';
-          const titleEl = node.querySelector('.pl-title');
-          if (titleEl && !node.querySelector('.pl-title-input')) {
-            const hasPR = vid.hasPianoRoll ? '🎹 ' : '';
-            titleEl.textContent = hasPR + vid.title + (isTemp ? ' (Temp)' : '');
-            titleEl.style.color = isTemp ? '#ff8800' : '';
+    const searchInput = makeElement('input', {
+      placeholder: '🔍 Search / Jump to song...',
+      value: this._searchQuery,
+      style: 'width:100%; font-size:10px; background:#000; color:#fff; border:1px solid #444; padding:4px 6px; border-radius:4px;',
+      onkeydown: (e) => {
+        e.stopPropagation();
+      },
+      oninput: (e) => {
+        this._searchQuery = e.target.value.toLowerCase().trim();
+        this.renderItems();
+
+        if (this._searchQuery) {
+          const idx = this.playlist.findIndex(v => (v.title || '').toLowerCase().includes(this._searchQuery) || v.id.toLowerCase().includes(this._searchQuery));
+          let isPlaying = false;
+          const player = window.projectApp;
+          if (player && player.gt && player.gt.videoPlayer) {
+            isPlaying = player.gt.videoPlayer.isPlaying();
           }
-          return;
-        }
-
-        let thumbUrl, hqThumbUrl;
-        let thumbStyle = {};
-
-        const isValidYtId = vid.id && vid.id.length === 11 && !vid.id.includes('/') && !vid.id.includes('.');
-
-        if (isValidYtId) {
-          thumbUrl = `https://img.youtube.com/vi/${vid.id}/mqdefault.jpg`;
-          hqThumbUrl = `https://img.youtube.com/vi/${vid.id}/hqdefault.jpg`;
-        } else {
-          thumbUrl =
-            'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-          hqThumbUrl = thumbUrl;
-          thumbStyle = {
-            background: '#333',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          };
-        }
-
-        const row = makeElement('div', {
-          className: `pl-item ${isActive ? 'active' : ''} ${
-            isTemp ? 'is-temp' : ''
-          }`,
-          style: {
-            display: shouldShow ? 'flex' : 'none',
+          if (!isPlaying && idx !== -1 && idx !== this.currentIndex) {
+            this._triggerPlay(idx);
           }
-        });
-        row.dataset.id = vid.id;
-
-        const inner = makeElement(
-          'div',
-          {
-            className: 'pl-item-inner',
-            onmouseenter: (e) => {
-              if (this.isDragging) return;
-              const card = this.hoverCard;
-              if (!card) return;
-
-              card.querySelector('#hc-img').src = hqThumbUrl;
-              card.querySelector('#hc-title').textContent = vid.title;
-              card.querySelector('#hc-id').textContent = `ID: ${vid.id}`;
-
-              card.style.display = 'flex';
-              const rect = row.getBoundingClientRect();
-              let left = rect.right + 10;
-              let top = rect.top - 50;
-
-              if (left + 320 > window.innerWidth) left = rect.left - 330;
-              if (top + 250 > window.innerHeight) top = window.innerHeight - 260;
-              if (top < 10) top = 10;
-
-              card.style.left = `${left}px`;
-              card.style.top = `${top}px`;
-
-              clearTimeout(this._hoverTimer);
-              this._hoverTimer = setTimeout(
-                () => card.classList.add('show'),
-                100
-              );
-            },
-            onmouseleave: (e) => {
-              clearTimeout(this._hoverTimer);
-              if (this.hoverCard) this.hoverCard.classList.remove('show');
-            },
-            onclick: (e) => {
-              if (
-                e.target.closest('button') ||
-                e.target.closest('.pl-handle') ||
-                e.target.tagName === 'INPUT'
-              )
-                return;
-              this._triggerPlay(index);
-            },
-          },
-          [
-            makeElement('div', {
-              className: 'pl-handle',
-              innerHTML: '⋮⋮',
-              onmousedown: (e) => this._handleDragStart(e, index, row),
-            }),
-            makeElement('img', {
-              src: thumbUrl,
-              className: 'pl-thumb',
-              style: thumbStyle,
-              onerror: (e) => {
-                e.target.src = '';
-                e.target.style.background = '#333';
-              },
-            }),
-            makeElement(
-              'div',
-              { className: 'pl-info' },
-              makeElement(
-                'div',
-                {
-                  className: 'pl-title',
-                  style: isTemp ? { color: '#ff8800' } : {},
-                },
-                (vid.hasPianoRoll ? '🎹 ' : '') +
-                  vid.title +
-                  (isTemp ? ' (Temp)' : '')
-              )
-            ),
-            makeElement('div', { className: 'pl-controls' }, [
-              this._makeBtn(
-                '⏱️',
-                'Set Start/End',
-                () => this._toggleTimeEditor(index, row),
-                'time'
-              ),
-              this._makeBtn(
-                '✎',
-                'Rename',
-                () => this._startRename(index, inner),
-                'edit'
-              ),
-              this._makeBtn('×', 'Remove', () => this.remove(index), 'del'),
-            ]),
-          ]
-        );
-
-        if (isUrl) {
-          const img = inner.querySelector('img');
-          img.style.backgroundImage =
-            'linear-gradient(45deg, #444 25%, #333 25%, #333 50%, #444 50%, #444 75%, #333 75%, #333 100%)';
-          img.style.backgroundSize = '10px 10px';
         }
+      }
+    });
 
-        row.appendChild(inner);
+    this.toolbar.append(topRow, urlRow, searchInput);
+  }
 
-        if (existingNodes[index]) {
-          this.listElement.replaceChild(row, existingNodes[index]);
-          existingNodes[index] = row;
-        } else {
-          this.listElement.appendChild(row);
-          existingNodes.push(row);
-        }
-      });
+  static parseTimeParam(tStr) {
+    if (!tStr) return null;
+    tStr = String(tStr).trim();
+    if (/^\d+$/.test(tStr)) return parseInt(tStr, 10);
+    let total = 0;
+    const hMatch = tStr.match(/(\d+)\s*h/i);
+    const mMatch = tStr.match(/(\d+)\s*m/i);
+    const sMatch = tStr.match(/(\d+)\s*s/i);
+    if (hMatch) total += parseInt(hMatch[1], 10) * 3600;
+    if (mMatch) total += parseInt(mMatch[1], 10) * 60;
+    if (sMatch) total += parseInt(sMatch[1], 10);
+    return total > 0 ? total : null;
+  }
 
-      while (this.listElement.children.length > this.playlist.length) {
-        this.listElement.removeChild(this.listElement.lastChild);
+  static extractVideoInfo(rawText) {
+    if (!rawText || typeof rawText !== 'string') return null;
+    let text = rawText.trim();
+
+    // Check for common standalone video formats
+    if (/\.(mp4|webm|ogg|mov)$/i.test(text)) {
+      return { id: text, title: text.split('/').pop().split('?')[0] };
+    }
+
+    // Bare 11-character video ID
+    if (/^[a-zA-Z0-9_-]{11}$/.test(text)) {
+      return { id: text, title: text };
+    }
+
+    // Comprehensive YouTube URL matchers
+    const ytPatterns = [
+      /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|live|shorts)\/|.*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i,
+      /[?&]v=([a-zA-Z0-9_-]{11})/i,
+      /\/shorts\/([a-zA-Z0-9_-]{11})/i,
+      /\/embed\/([a-zA-Z0-9_-]{11})/i,
+      /\/live\/([a-zA-Z0-9_-]{11})/i,
+      /youtu\.be\/([a-zA-Z0-9_-]{11})/i
+    ];
+
+    let videoId = null;
+    for (const pat of ytPatterns) {
+      const match = text.match(pat);
+      if (match && match[1]) {
+        videoId = match[1];
+        break;
       }
     }
+
+    if (!videoId) {
+      // Check if line starts with 11-char ID followed by title
+      const spaceIdx = text.indexOf(' ');
+      if (spaceIdx === 11) {
+        const potentialId = text.substring(0, 11);
+        if (/^[a-zA-Z0-9_-]{11}$/.test(potentialId)) {
+          return {
+            id: potentialId,
+            title: text.substring(12).trim() || potentialId
+          };
+        }
+      }
+      return null;
+    }
+
+    // Extract optional timestamp parameter (t= or start=)
+    let startTime = null;
+    const timeMatch = text.match(/[?&#](?:t|start)=([^&#\s]+)/i);
+    if (timeMatch && timeMatch[1]) {
+      startTime = Playlist.parseTimeParam(timeMatch[1]);
+    }
+
+    // Extract title if present in text around URL
+    let customTitle = null;
+    const parts = text.split(/\s+/);
+    if (parts.length > 1) {
+      const nonUrlParts = parts.filter(p => !p.includes('youtube.com') && !p.includes('youtu.be') && p !== videoId);
+      if (nonUrlParts.length > 0) {
+        customTitle = nonUrlParts.join(' ');
+      }
+    }
+
+    return {
+      id: videoId,
+      title: customTitle || videoId,
+      startTime: startTime || undefined
+    };
+  }
+
+  async addVideoAndPlay(vidInfo) {
+    const id = vidInfo.id;
+    let title = vidInfo.title || id;
+    const startTime = vidInfo.startTime;
+
+    const existingIdx = this.playlist.findIndex(v => v.id === id);
+    if (existingIdx !== -1) {
+      if (startTime !== undefined && startTime !== null) {
+        this.playlist[existingIdx].startTime = startTime;
+      }
+      this._triggerPlay(existingIdx);
+      window.projectApp?.setStatus(`Playing: "${this.playlist[existingIdx].title}"`, '#4f4');
+      return;
+    }
+
+    const idx = this.add(id, title, false, true, 'top');
+    if (startTime !== undefined && startTime !== null && this.playlist[idx]) {
+      this.playlist[idx].startTime = startTime;
+    }
+    this._triggerPlay(idx);
+    window.projectApp?.setStatus(`Loaded video: "${title}"`, '#4f4');
+
+    if (!vidInfo.title || vidInfo.title === id) {
+      this._fetchVideoTitle(id).then(fetchedTitle => {
+        if (fetchedTitle) {
+          const item = this.playlist.find(v => v.id === id);
+          if (item) {
+            item.title = fetchedTitle;
+            this.renderItems();
+            this.onPlaylistChange();
+            window.projectApp?.setStatus(`Playing: "${fetchedTitle}"`, '#4f4');
+          }
+        }
+      });
+    }
+  }
+
+  renderItems() {
+    if (this.playlist.length === 0) {
+      this.listElement.innerHTML = '';
+      this.listElement.appendChild(
+        makeElement(
+          'div',
+          {
+            style: { padding: '20px', color: '#999', textAlign: 'center' },
+          },
+          'No videos. Paste URL or drop file.'
+        )
+      );
+      return;
+    }
+
+    if (
+      this.listElement.firstChild &&
+      !this.listElement.firstChild.classList?.contains('pl-item')
+    ) {
+      this.listElement.innerHTML = '';
+    }
+
+    const existingNodes = Array.from(this.listElement.children);
+    const q = this._searchQuery || '';
+
+    let isPlaying = false;
+    const player = window.projectApp;
+    if (player && player.gt && player.gt.videoPlayer) {
+      isPlaying = player.gt.videoPlayer.isPlaying();
+    }
+
+    this.playlist.forEach((vid, index) => {
+      const isActive = index === this.currentIndex;
+      const isTemp = !!vid.playOnce;
+      const isUrl = vid.id.includes('/') || vid.id.includes('.');
+
+      let matchesSearch = true;
+      if (q) {
+        const titleMatch = (vid.title || '').toLowerCase().includes(q);
+        const idMatch = vid.id.toLowerCase().includes(q);
+        matchesSearch = titleMatch || idMatch;
+      }
+
+      const shouldShow = matchesSearch || (isActive && isPlaying);
+
+      let node = existingNodes[index];
+
+      if (node && node.dataset.id === vid.id) {
+        node.className = `pl-item ${isActive ? 'active' : ''} ${
+          isTemp ? 'is-temp' : ''
+        }`;
+        node.style.display = shouldShow ? 'flex' : 'none';
+        const titleEl = node.querySelector('.pl-title');
+        if (titleEl && !node.querySelector('.pl-title-input')) {
+          const hasPR = vid.hasPianoRoll ? '🎹 ' : '';
+          titleEl.textContent = hasPR + vid.title + (isTemp ? ' (Temp)' : '');
+          titleEl.style.color = isTemp ? '#ff8800' : '';
+        }
+        return;
+      }
+
+      let thumbUrl, hqThumbUrl;
+      let thumbStyle = {};
+
+      const isValidYtId = vid.id && vid.id.length === 11 && !vid.id.includes('/') && !vid.id.includes('.');
+
+      if (isValidYtId) {
+        thumbUrl = `https://img.youtube.com/vi/${vid.id}/mqdefault.jpg`;
+        hqThumbUrl = `https://img.youtube.com/vi/${vid.id}/hqdefault.jpg`;
+      } else {
+        thumbUrl =
+          'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+        hqThumbUrl = thumbUrl;
+        thumbStyle = {
+          background: '#333',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        };
+      }
+
+      const row = makeElement('div', {
+        className: `pl-item ${isActive ? 'active' : ''} ${
+          isTemp ? 'is-temp' : ''
+        }`,
+        style: {
+          display: shouldShow ? 'flex' : 'none',
+        }
+      });
+      row.dataset.id = vid.id;
+
+      const inner = makeElement(
+        'div',
+        {
+          className: 'pl-item-inner',
+          onmouseenter: (e) => {
+            if (this.isDragging) return;
+            const card = this.hoverCard;
+            if (!card) return;
+
+            card.querySelector('#hc-img').src = hqThumbUrl;
+            card.querySelector('#hc-title').textContent = vid.title;
+            card.querySelector('#hc-id').textContent = `ID: ${vid.id}`;
+
+            card.style.display = 'flex';
+            const rect = row.getBoundingClientRect();
+            let left = rect.right + 10;
+            let top = rect.top - 50;
+
+            if (left + 320 > window.innerWidth) left = rect.left - 330;
+            if (top + 250 > window.innerHeight) top = window.innerHeight - 260;
+            if (top < 10) top = 10;
+
+            card.style.left = `${left}px`;
+            card.style.top = `${top}px`;
+
+            clearTimeout(this._hoverTimer);
+            this._hoverTimer = setTimeout(
+              () => card.classList.add('show'),
+              100
+            );
+          },
+          onmouseleave: (e) => {
+            clearTimeout(this._hoverTimer);
+            if (this.hoverCard) this.hoverCard.classList.remove('show');
+          },
+          onclick: (e) => {
+            if (
+              e.target.closest('button') ||
+              e.target.closest('.pl-handle') ||
+              e.target.tagName === 'INPUT'
+            )
+              return;
+            this._triggerPlay(index);
+          },
+        },
+        [
+          makeElement('div', {
+            className: 'pl-handle',
+            innerHTML: '⋮⋮',
+            onmousedown: (e) => this._handleDragStart(e, index, row),
+          }),
+          makeElement('img', {
+            src: thumbUrl,
+            className: 'pl-thumb',
+            style: thumbStyle,
+            onerror: (e) => {
+              e.target.src = '';
+              e.target.style.background = '#333';
+            },
+          }),
+          makeElement(
+            'div',
+            { className: 'pl-info' },
+            makeElement(
+              'div',
+              {
+                className: 'pl-title',
+                style: isTemp ? { color: '#ff8800' } : {},
+              },
+              (vid.hasPianoRoll ? '🎹 ' : '') +
+                vid.title +
+                (isTemp ? ' (Temp)' : '')
+            )
+          ),
+          makeElement('div', { className: 'pl-controls' }, [
+            this._makeBtn(
+              '⏱️',
+              'Set Start/End',
+              () => this._toggleTimeEditor(index, row),
+              'time'
+            ),
+            this._makeBtn(
+              '✎',
+              'Rename',
+              () => this._startRename(index, inner),
+              'edit'
+            ),
+            this._makeBtn('×', 'Remove', () => this.remove(index), 'del'),
+          ]),
+        ]
+      );
+
+      if (isUrl) {
+        const img = inner.querySelector('img');
+        img.style.backgroundImage =
+          'linear-gradient(45deg, #444 25%, #333 25%, #333 50%, #444 50%, #444 75%, #333 75%, #333 100%)';
+        img.style.backgroundSize = '10px 10px';
+      }
+
+      row.appendChild(inner);
+
+      if (existingNodes[index]) {
+        this.listElement.replaceChild(row, existingNodes[index]);
+        existingNodes[index] = row;
+      } else {
+        this.listElement.appendChild(row);
+        existingNodes.push(row);
+      }
+    });
+
+    while (this.listElement.children.length > this.playlist.length) {
+      this.listElement.removeChild(this.listElement.lastChild);
+    }
+  }
 
   _makeBtn(label, title, onClick, extraClass = '') {
     return makeElement(
@@ -631,37 +744,17 @@ class Playlist {
   }
 
   scrollToCurrent() {
-      setTimeout(() => {
-        const active = this.listElement.querySelector('.active');
-        if (active) {
-          active.scrollIntoView({ behavior: 'auto', block: 'nearest' });
-        }
-      }, 50);
-    }
+    setTimeout(() => {
+      const active = this.listElement.querySelector('.active');
+      if (active) {
+        active.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+      }
+    }, 50);
+  }
 
   _parseYoutubeId(text) {
-    if (!text) return null;
-    const trimmed = text.trim();
-
-    // Check for common video file extensions
-    if (/\.(mp4|webm|ogg|mov)$/i.test(trimmed)) {
-      return trimmed;
-    }
-
-    if (trimmed.length === 11) return trimmed;
-    if (trimmed.includes('v=')) return trimmed.split('v=')[1].split('&')[0];
-    if (trimmed.includes('youtu.be/'))
-      return trimmed.split('youtu.be/')[1].split('?')[0];
-    if (trimmed.includes('/shorts/'))
-      return trimmed.split('/shorts/')[1].split('?')[0];
-
-    // If it looks like a full URL but not a specific video file,
-    // we might accept it if the user pasted it, assuming HTML5 player handles it.
-    if (trimmed.startsWith('http') && trimmed.includes('/')) {
-      return trimmed;
-    }
-
-    return null;
+    const info = Playlist.extractVideoInfo(text);
+    return info ? info.id : null;
   }
 
   async _fetchVideoTitle(videoId) {
@@ -782,7 +875,6 @@ class Playlist {
     .pl-btn:hover { background: #555; color: #fff; }
     .pl-btn.del:hover { background: #822; border-color: #a44; }
 
-    /* HOVER CARD */
     .pl-hover-card {
         position: fixed;
         z-index: 2147483647;
@@ -830,7 +922,6 @@ class Playlist {
   `;
     applyCss(css, 'playlist-styles');
 
-    // Create global hover card if it doesn't exist
     if (!document.getElementById('global-pl-hover-card')) {
       this.hoverCard = makeElement(
         'div',
@@ -850,24 +941,21 @@ class Playlist {
   }
 
   _handleDragStart(e, index, itemRow) {
-    if (e.button !== 0) return; // Only left mouse
-    e.preventDefault(); // Prevent text selection
+    if (e.button !== 0) return;
+    e.preventDefault();
 
     this.isDragging = true;
     this.dragStartIndex = index;
     this.draggedItem = itemRow;
 
-    // 1. Calculate Offsets
     const rect = itemRow.getBoundingClientRect();
     this.dragOffsetX = e.clientX - rect.left;
     this.dragOffsetY = e.clientY - rect.top;
 
-    // 2. Create the Ghost (The thing you drag)
     this.ghost = itemRow.cloneNode(true);
     this.ghost.classList.add('pl-ghost');
-    this.ghost.classList.remove('active'); // Remove active highlight from ghost usually looks better
+    this.ghost.classList.remove('active');
 
-    // Set explicit dimensions for fixed positioning
     this.ghost.style.width = `${rect.width}px`;
     this.ghost.style.height = `${rect.height}px`;
     this.ghost.style.left = `${rect.left}px`;
@@ -875,15 +963,12 @@ class Playlist {
 
     document.body.appendChild(this.ghost);
 
-    // 3. Create the Gap (The placeholder in the list)
     this.gap = makeElement('div', { className: 'pl-gap' });
     this.gap.style.height = `${rect.height}px`;
 
-    // 4. Swap Logic: Replace item with gap in DOM
     itemRow.parentNode.insertBefore(this.gap, itemRow);
     itemRow.style.display = 'none';
 
-    // 5. Global Listeners
     this._boundDragMove = (ev) => this._handleDragMove(ev);
     this._boundDragEnd = (ev) => this._handleDragEnd(ev);
 
@@ -894,16 +979,12 @@ class Playlist {
   _handleDragMove(e) {
     if (!this.ghost) return;
 
-    // 1. Move Ghost
     const top = e.clientY - this.dragOffsetY;
     const left = e.clientX - this.dragOffsetX;
 
-    // Constrain horizontally slightly just to keep it near cursor, but allow free movement
     this.ghost.style.top = `${top}px`;
     this.ghost.style.left = `${left}px`;
 
-    // 2. Move Gap (Snapping Logic)
-    // Get all potential siblings (excluding the hidden item and the ghost)
     const siblings = Array.from(this.listElement.children).filter(
       (el) =>
         el !== this.ghost &&
@@ -914,7 +995,6 @@ class Playlist {
     const ghostMidY = top + this.ghost.offsetHeight / 2;
     let insertBeforeElement = null;
 
-    // Find the first element whose middle is below the ghost's middle
     for (const sibling of siblings) {
       const sibRect = sibling.getBoundingClientRect();
       const sibMidY = sibRect.top + sibRect.height / 2;
@@ -924,13 +1004,11 @@ class Playlist {
       }
     }
 
-    // DOM Move
     if (insertBeforeElement) {
       if (this.gap.nextElementSibling !== insertBeforeElement) {
         this.listElement.insertBefore(this.gap, insertBeforeElement);
       }
     } else {
-      // If no sibling found below, append to end
       this.listElement.appendChild(this.gap);
     }
   }
@@ -941,39 +1019,29 @@ class Playlist {
 
     if (!this.gap || !this.ghost) return;
 
-    // 1. Calculate New Index
     const siblings = Array.from(this.listElement.children);
     const visibleSiblings = siblings.filter(
       (el) => el.style.display !== 'none'
     );
     const newIndex = visibleSiblings.indexOf(this.gap);
 
-    // 2. Animate Ghost to Gap
     const gapRect = this.gap.getBoundingClientRect();
     this.ghost.style.transition =
       'top 0.2s cubic-bezier(0.2, 0, 0.2, 1), left 0.2s cubic-bezier(0.2, 0, 0.2, 1)';
     this.ghost.style.top = `${gapRect.top}px`;
     this.ghost.style.left = `${gapRect.left}px`;
 
-    // 3. Commit Change after animation
     setTimeout(() => {
-      // Cleanup DOM
       if (this.ghost) this.ghost.remove();
       if (this.gap) this.gap.remove();
-      // Temporarily show original until render overwrites, prevents flicker
       if (this.draggedItem) this.draggedItem.style.display = '';
 
-      // Update Array
       if (newIndex !== -1 && newIndex !== this.dragStartIndex) {
         const item = this.playlist[this.dragStartIndex];
 
-        // Remove from old
         this.playlist.splice(this.dragStartIndex, 1);
-
-        // Insert at new
         this.playlist.splice(newIndex, 0, item);
 
-        // Fix current index pointer
         if (this.currentIndex === this.dragStartIndex) {
           this.currentIndex = newIndex;
         } else if (
@@ -991,7 +1059,6 @@ class Playlist {
         this.onPlaylistChange();
       }
 
-      // Full Re-render to sanitize DOM
       this.renderItems();
 
       this.ghost = null;
@@ -1070,7 +1137,7 @@ class Playlist {
           item.title = newTitle;
           this.onPlaylistChange();
         }
-        input.classList.remove('pl-title-input'); // Allow it to be overwritten
+        input.classList.remove('pl-title-input');
         this.renderItems();
       },
     });
@@ -1079,7 +1146,7 @@ class Playlist {
     titleEl.appendChild(input);
     setTimeout(() => {
       input.focus();
-      input.select(); // Highlight all text for instant overwrite
+      input.select();
     }, 10);
   }
 
@@ -1124,13 +1191,12 @@ class Playlist {
         fontSize: '11px',
         borderTop: '1px solid #222',
       },
-      // Prevent clicks inside the editor from triggering the video to play
       onclick: (e) => e.stopPropagation(),
     });
 
     const handleKeydown = (e) => {
       if (e.key === 'Enter') {
-        e.target.blur(); // Force onchange to fire and save the value
+        e.target.blur();
         editor.remove();
       } else if (e.key === 'Escape') {
         editor.remove();
@@ -1186,35 +1252,25 @@ class Playlist {
     editor.append(
       makeElement('span', { style: { color: '#888' } }, 'Start (s):'),
       startInput,
-      makeElement(
-        'span',
-        { style: { color: '#888', marginLeft: '10px' } },
-        'End (s):'
-      ),
+      makeElement('span', { style: { color: '#888', marginLeft: '10px' } }, 'End (s):'),
       endInput,
-      makeElement(
-        'button',
-        {
-          className: 'pl-btn',
-          title: 'Close Editor',
-          style: {
-            marginLeft: 'auto',
-            width: '24px',
-            height: '24px',
-            fontSize: '12px',
-          },
-          onclick: (e) => {
-            e.stopPropagation();
-            editor.remove();
-          },
+      makeElement('button', {
+        className: 'pl-btn',
+        title: 'Close Editor',
+        style: {
+          marginLeft: 'auto',
+          width: '24px',
+          height: '24px',
+          fontSize: '12px',
         },
-        '✕'
-      )
+        onclick: (e) => {
+          e.stopPropagation();
+          editor.remove();
+        },
+      }, '✕')
     );
 
     row.appendChild(editor);
-
-    // Auto-focus the start input when opened
     setTimeout(() => startInput.focus(), 10);
   }
 
@@ -1239,180 +1295,107 @@ class Playlist {
   }
 
   scrollToIndex(index) {
-      setTimeout(() => {
-        const nodes = this.listElement.children;
-        if (nodes[index]) {
-          nodes[index].scrollIntoView({ behavior: 'auto', block: 'nearest' });
-        }
-      }, 50);
-    }
-
-
-  openPlaylistActionsDialog() {
-      const container = makeElement('div', {
-        style: 'display:flex; flex-direction:column; gap:12px; padding:10px; background:#1e1e1e; color:#eee;',
-      });
-
-      const sortSelect = makeElement('select', {
-        style: 'width:100%; background:#111; color:#ccc; border:1px solid #444; font-size:11px; padding:6px 10px; border-radius:4px; cursor:pointer;',
-      });
-
-      [
-        { v: '', l: 'Sort / Shuffle Playlist...' },
-        { v: 'shuffle', l: '🔀 Shuffle' },
-        { v: 'sort_1', l: 'Sort: Title (1st Part)' },
-        { v: 'sort_2', l: 'Sort: Song (2nd Part)' },
-      ].forEach((opt) => {
-        sortSelect.appendChild(makeElement('option', { value: opt.v }, opt.l));
-      });
-
-      sortSelect.onchange = (e) => {
-        const v = e.target.value;
-        if (v === 'shuffle') this.shuffle();
-        else if (v === 'sort_1') this._sortPlaylist(true);
-        else if (v === 'sort_2') this._sortPlaylist(false);
-        dlg.close();
-      };
-
-      const btnRow = makeElement('div', {
-        style: 'display:grid; grid-template-columns:1fr 1fr; gap:8px;',
-      });
-
-      const makeActBtn = (label, cb, className = '') => {
-        return makeElement('button', {
-          className: 'dialog-button ' + className,
-          style: 'padding:8px 12px; font-weight:bold; font-size:11px;',
-          onclick: () => {
-            cb();
-            dlg.close();
-          }
-        }, label);
-      };
-
-      btnRow.append(
-        makeActBtn('☁️ Save Cloud', () => this.onCloudSave(), 'primary'),
-        makeActBtn('📥 Import File', () => this.onImportFile()),
-        makeActBtn('💾 Export File', () => this._handleSaveFile()),
-        makeActBtn('🗑 Clear All', () => {
-          if (confirm('Clear all videos?')) this.clear();
-        }, 'danger')
-      );
-
-      container.append(
-        makeElement('div', { style: 'font-size:11px; color:#888; text-transform:uppercase; font-weight:bold;' }, 'Organize'),
-        sortSelect,
-        makeElement('div', { style: 'font-size:11px; color:#888; text-transform:uppercase; font-weight:bold; margin-top:5px;' }, 'Backup & Storage'),
-        btnRow
-      );
-
-      const dlg = UITools.makeDialog({
-        title: 'Playlist Options',
-        content: container,
-        width: '320px',
-        appendTo: this.player.rootElement,
-      });
-    }
+    setTimeout(() => {
+      const nodes = this.listElement.children;
+      if (nodes[index]) {
+        nodes[index].scrollIntoView({ behavior: 'auto', block: 'nearest' });
+      }
+    }, 50);
+  }
 
   getFilteredIndices() {
-      const q = this._searchQuery || '';
-      const indices = [];
+    const q = this._searchQuery || '';
+    const indices = [];
 
-      let isPlaying = false;
-      const player = window.projectApp;
-      if (player && player.gt && player.gt.videoPlayer) {
-        isPlaying = player.gt.videoPlayer.isPlaying();
+    let isPlaying = false;
+    const player = window.projectApp;
+    if (player && player.gt && player.gt.videoPlayer) {
+      isPlaying = player.gt.videoPlayer.isPlaying();
+    }
+
+    this.playlist.forEach((vid, index) => {
+      const isActive = index === this.currentIndex;
+      let matchesSearch = true;
+      if (q) {
+        const titleMatch = (vid.title || '').toLowerCase().includes(q);
+        const idMatch = vid.id.toLowerCase().includes(q);
+        matchesSearch = titleMatch || idMatch;
       }
 
-      this.playlist.forEach((vid, index) => {
-        const isActive = index === this.currentIndex;
-        let matchesSearch = true;
-        if (q) {
-          const titleMatch = (vid.title || '').toLowerCase().includes(q);
-          const idMatch = vid.id.toLowerCase().includes(q);
-          matchesSearch = titleMatch || idMatch;
-        }
-
-        // Include in the effective playing list if it matches the search OR if it is the currently playing item
-        if (matchesSearch || (isActive && isPlaying)) {
-          indices.push(index);
-        }
-      });
-      return indices;
-    }
+      if (matchesSearch || (isActive && isPlaying)) {
+        indices.push(index);
+      }
+    });
+    return indices;
+  }
 
   openImportExportDialog() {
-      const player = window.projectApp;
-      if (!player) {
-        console.error("openImportExportDialog: projectApp not found");
-        return;
-      }
+    const player = window.projectApp;
+    if (!player) return;
 
-      const container = makeElement('div', {
-        style: 'display:flex; flex-direction:column; gap:16px; padding:15px; background:#1e1e1e; color:#eee; font-family:sans-serif;',
+    const container = makeElement('div', {
+      style: 'display:flex; flex-direction:column; gap:16px; padding:15px; background:#1e1e1e; color:#eee; font-family:sans-serif;',
+    });
+
+    const createGroup = (title, elements) => {
+      const g = makeElement('div', {
+        style: 'border:1px solid #333; padding:12px; border-radius:8px; background:rgba(0,0,0,0.15); display:flex; flex-direction:column; gap:8px;',
       });
+      g.append(
+        makeElement('div', { style: 'font-size:11px; color:#4a90e2; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;' }, title),
+        ...elements
+      );
+      return g;
+    };
 
-      const createGroup = (title, elements) => {
-        const g = makeElement('div', {
-          style: 'border:1px solid #333; padding:12px; border-radius:8px; background:rgba(0,0,0,0.15); display:flex; flex-direction:column; gap:8px;',
-        });
-        g.append(
-          makeElement('div', { style: 'font-size:11px; color:#4a90e2; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;' }, title),
-          ...elements
-        );
-        return g;
-      };
+    const makeActBtn = (label, cb, className = '') => {
+      return makeElement('button', {
+        className: 'dialog-button ' + className,
+        style: 'padding:8px 12px; font-weight:bold; font-size:12px; display:flex; align-items:center; justify-content:center; gap:6px;',
+        onclick: () => {
+          cb();
+          dlg.close();
+        }
+      }, label);
+    };
 
-      const makeActBtn = (label, cb, className = '') => {
-        return makeElement('button', {
-          className: 'dialog-button ' + className,
-          style: 'padding:8px 12px; font-weight:bold; font-size:12px; display:flex; align-items:center; justify-content:center; gap:6px;',
-          onclick: () => {
-            cb();
-            dlg.close();
-          }
-        }, label);
-      };
+    const playlistGroup = createGroup('📜 Playlist File Operations', [
+      makeElement('div', { style: 'display:grid; grid-template-columns:1fr 1fr; gap:8px;' }, [
+        makeActBtn('📤 Import Playlist', () => this.onImportFile()),
+        makeActBtn('📥 Export Playlist', () => this._handleSaveFile()),
+      ]),
+      makeActBtn('☁️ Save Playlist to Cloud', () => this.onCloudSave(), 'primary'),
+      makeActBtn('🗑 Clear Entire Playlist', () => {
+        if (confirm('Are you sure you want to clear all videos from the playlist?')) this.clear();
+      }, 'danger')
+    ]);
 
-      // --- PLAYLIST BACKUP ---
-      const playlistGroup = createGroup('📜 Playlist File Operations', [
-        makeElement('div', { style: 'display:grid; grid-template-columns:1fr 1fr; gap:8px;' }, [
-          makeActBtn('📤 Import Playlist', () => this.onImportFile()),
-          makeActBtn('📥 Export Playlist', () => this._handleSaveFile()),
-        ]),
-        makeActBtn('☁️ Save Playlist to Cloud', () => this.onCloudSave(), 'primary'),
-        makeActBtn('🗑 Clear Entire Playlist', () => {
-          if (confirm('Are you sure you want to clear all videos from the playlist?')) this.clear();
-        }, 'danger')
-      ]);
+    const pianoRollGroup = createGroup('🎹 Piano Roll (.txt VEQ) Operations', [
+      makeElement('div', { style: 'display:grid; grid-template-columns:1fr 1fr; gap:8px;' }, [
+        makeActBtn('📤 Import Piano Roll', () => {
+          if (player && player.fileIOManager) player.fileIOManager.importVEQ();
+        }),
+        makeActBtn('📥 Export Piano Roll', () => {
+          if (player && player.fileIOManager) player.fileIOManager.exportVEQ();
+        }),
+      ]),
+      makeElement('div', { style: 'display:grid; grid-template-columns:1fr 1fr; gap:8px;' }, [
+        makeActBtn('✏️ Open Text Editor', () => {
+          if (player && player.advancedToolsUI) player.advancedToolsUI.openTextEditor();
+        }, 'primary'),
+        makeActBtn('📁 Save to Local Folder', () => {
+          if (player && player.advancedToolsUI) player.advancedToolsUI.savePianoRollToFolder();
+        }),
+      ])
+    ]);
 
-      // --- PIANO ROLL BACKUP ---
-      const pianoRollGroup = createGroup('🎹 Piano Roll (.txt VEQ) Operations', [
-        makeElement('div', { style: 'display:grid; grid-template-columns:1fr 1fr; gap:8px;' }, [
-          makeActBtn('📤 Import Piano Roll', () => {
-            if (player && player.fileIOManager) player.fileIOManager.importVEQ();
-          }),
-          makeActBtn('📥 Export Piano Roll', () => {
-            if (player && player.fileIOManager) player.fileIOManager.exportVEQ();
-          }),
-        ]),
-        makeElement('div', { style: 'display:grid; grid-template-columns:1fr 1fr; gap:8px;' }, [
-          makeActBtn('✏️ Open Text Editor', () => {
-            if (player && player.advancedToolsUI) player.advancedToolsUI.openTextEditor();
-          }, 'primary'),
-          makeActBtn('📁 Save to Local Folder', () => {
-            if (player && player.advancedToolsUI) player.advancedToolsUI.savePianoRollToFolder();
-          }),
-        ])
-      ]);
+    container.append(playlistGroup, pianoRollGroup);
 
-      container.append(playlistGroup, pianoRollGroup);
-
-      const dlg = UITools.makeDialog({
-        title: 'Import / Export & Backup Manager',
-        content: container,
-        width: '420px',
-        appendTo: player.rootElement,
-      });
-    }
+    const dlg = UITools.makeDialog({
+      title: 'Import / Export & Backup Manager',
+      content: container,
+      width: '420px',
+      appendTo: player.rootElement,
+    });
+  }
 }
-

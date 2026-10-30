@@ -1,7 +1,4 @@
-
 class FileIOManager {
-  
-  
   constructor(player) {
     this.player = player;
   }
@@ -91,118 +88,21 @@ class FileIOManager {
   }
 
   importPlaylist() {
-      const input = makeElement('input', {
-        type: 'file',
-        accept: '.txt,.json',
-        style: { display: 'none' },
-      });
-      input.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        try {
-          const text = await file.text();
-          let items = [];
-  
-          try {
-            const json = JSON.parse(text);
-            const list = Array.isArray(json) ? json : json.playlist;
-            if (Array.isArray(list)) {
-              items = list.map((i) => ({
-                id: i.id,
-                title: i.title || i.id,
-                hasPianoRoll: i.hasPianoRoll,
-                songSettings: i.songSettings,
-                startTime: i.startTime,
-                endTime: i.endTime,
-              }));
-            }
-          } catch (err) {
-            const lines = text.split(/\r?\n/);
-            lines.forEach((l) => {
-              const parsed = PlaylistFormat.parseLine(l);
-              if (parsed) items.push(parsed);
-            });
-          }
-  
-          if (items.length === 0) {
-            alert('No videos found in file.');
-            return;
-          }
-  
-          if (this.player.playlistManager.playlist.length > 0) {
-            UITools.makeDialog({
-              title: 'Load Playlist',
-              content: `Found ${items.length} videos. How would you like to add them?`,
-              width: '350px',
-              appendTo: this.player.rootElement,
-              buttons: [
-                {
-                  label: 'Replace',
-                  className: 'danger',
-                  onClick: (btn, dBox) => {
-                    this.player.playlistManager.clear();
-                    this.player.playlistManager.addBulk(items, true);
-                    dBox.close();
-                  },
-                },
-                {
-                  label: 'Append (End)',
-                  className: 'primary',
-                  onClick: (btn, dBox) => {
-                    this.player.playlistManager.addBulk(items, true);
-                    dBox.close();
-                  },
-                },
-                {
-                  label: 'Prepend (Start)',
-                  className: 'primary',
-                  onClick: (btn, dBox) => {
-                    this.player.playlistManager.addBulk(items, false);
-                    dBox.close();
-                  },
-                },
-                { label: 'Cancel', onClick: (btn, dBox) => dBox.close() },
-              ],
-            });
-          } else {
-            const count = this.player.playlistManager.addBulk(items, true);
-            this.player.setStatus(`Loaded ${count} videos.`, '#4f4');
-          }
-        } catch (err) {
-          console.error(err);
-          alert('Error importing playlist.');
-        }
-        input.remove();
-      };
-      document.body.appendChild(input);
-      input.click();
-    }
-
-  async fetchAndLoadPlaylist(url, forcedAddType = null) {
-      let fetchUrl = url;
-      if (fetchUrl && !fetchUrl.includes('/') && !fetchUrl.includes('.')) {
-        fetchUrl = `playlists/${fetchUrl}.txt`;
-      }
-
-      // Convert absolute domain-root paths (/playlists/...) to resolve relative to current app directory
-      if (fetchUrl && fetchUrl.startsWith('/') && !fetchUrl.startsWith('//')) {
-        const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
-        fetchUrl = window.location.origin + basePath + fetchUrl.substring(1);
-      } else if (fetchUrl && !fetchUrl.startsWith('http')) {
-        // Resolve relative path against current page URL
-        fetchUrl = new URL(fetchUrl, window.location.href).href;
-      }
-
-      console.log(`Loading playlist from: ${fetchUrl}`);
+    const input = makeElement('input', {
+      type: 'file',
+      accept: '.txt,.json',
+      style: { display: 'none' },
+    });
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
       try {
-        const res = await fetch(fetchUrl);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const text = await res.text();
+        const text = await file.text();
         let items = [];
 
         try {
-          const data = JSON.parse(text);
-          const list = Array.isArray(data) ? data : data.playlist;
+          const json = JSON.parse(text);
+          const list = Array.isArray(json) ? json : json.playlist;
           if (Array.isArray(list)) {
             items = list.map((i) => ({
               id: i.id,
@@ -213,7 +113,7 @@ class FileIOManager {
               endTime: i.endTime,
             }));
           }
-        } catch (e) {
+        } catch (err) {
           const lines = text.split(/\r?\n/);
           lines.forEach((l) => {
             const parsed = PlaylistFormat.parseLine(l);
@@ -221,87 +121,193 @@ class FileIOManager {
           });
         }
 
-        if (items.length > 0) {
-          const finishLoad = (addType) => {
-            this.player.state.settings.lastPlaylistUrl = url;
-            this.player.state.settings.playlistModified = false;
-            this.player._saveSettings();
+        if (items.length === 0) {
+          alert('No videos found in file.');
+          return;
+        }
 
-            this.player._isLoadingPlaylist = true;
-            if (addType === 'replace') {
-              this.player.playlistManager.clear();
-              this.player.playlistManager.addBulk(items, true);
-            } else if (addType === 'append') {
-              this.player.playlistManager.addBulk(items, true);
-            } else if (addType === 'prepend') {
-              this.player.playlistManager.addBulk(items, false);
-            }
-            this.player._isLoadingPlaylist = false;
-
-            this.player.setStatus(`Loaded ${items.length} videos.`, '#4f4');
-            if (this.player.playlistSelectorUI) {
-              this.player.playlistSelectorUI.markUnmodified(url);
-            }
-            if (this.player.leftPanel) this.player.leftPanel.open('playlist');
-          };
-
-          if (
-            forcedAddType === 'replace' ||
-            forcedAddType === 'append' ||
-            forcedAddType === 'prepend'
-          ) {
-            finishLoad(forcedAddType);
-            return true;
-          }
-
-          if (this.player.playlistManager.playlist.length > 0) {
-            UITools.makeDialog({
-              title: 'Load Playlist',
-              content: `Found ${items.length} videos in URL. How would you like to add them?`,
-              width: '350px',
-              appendTo: this.player.rootElement,
-              buttons: [
-                {
-                  label: 'Replace',
-                  className: 'danger',
-                  onClick: (btn, dBox) => {
-                    finishLoad('replace');
-                    dBox.close();
-                  },
+        if (this.player.playlistManager.playlist.length > 0) {
+          UITools.makeDialog({
+            title: 'Load Playlist',
+            content: `Found ${items.length} videos. How would you like to add them?`,
+            width: '350px',
+            appendTo: this.player.rootElement,
+            buttons: [
+              {
+                label: 'Replace',
+                className: 'danger',
+                onClick: (btn, dBox) => {
+                  this.player.playlistManager.clear();
+                  this.player.playlistManager.addBulk(items, true);
+                  dBox.close();
                 },
-                {
-                  label: 'Append (End)',
-                  className: 'primary',
-                  onClick: (btn, dBox) => {
-                    finishLoad('append');
-                    dBox.close();
-                  },
+              },
+              {
+                label: 'Append (End)',
+                className: 'primary',
+                onClick: (btn, dBox) => {
+                  this.player.playlistManager.addBulk(items, true);
+                  dBox.close();
                 },
-                {
-                  label: 'Prepend (Start)',
-                  className: 'primary',
-                  onClick: (btn, dBox) => {
-                    finishLoad('prepend');
-                    dBox.close();
-                  },
+              },
+              {
+                label: 'Prepend (Start)',
+                className: 'primary',
+                onClick: (btn, dBox) => {
+                  this.player.playlistManager.addBulk(items, false);
+                  dBox.close();
                 },
-                { label: 'Cancel', onClick: (btn, dBox) => dBox.close() },
-              ],
-            });
-          } else {
-            finishLoad('replace');
-          }
-          return true;
+              },
+              { label: 'Cancel', onClick: (btn, dBox) => dBox.close() },
+            ],
+          });
         } else {
-          this.player.setStatus('No videos found in URL.', '#fa0');
-          return false;
+          const count = this.player.playlistManager.addBulk(items, true);
+          this.player.setStatus(`Loaded ${count} videos.`, '#4f4');
         }
       } catch (err) {
-        console.error('Playlist fetch error:', err);
-        this.player.setStatus(`Failed: ${err.message}`, '#f55');
+        console.error(err);
+        alert('Error importing playlist.');
+      }
+      input.remove();
+    };
+    document.body.appendChild(input);
+    input.click();
+  }
+
+  async fetchAndLoadPlaylist(url, forcedAddType = null) {
+    if (!url) return false;
+
+    // Check if this URL is actually a YouTube video URL rather than a text playlist file!
+    const vidInfo = Playlist.extractVideoInfo(url);
+    if (vidInfo && vidInfo.id && !url.endsWith('.txt') && !url.endsWith('.json') && !url.includes('/playlists/')) {
+      console.log(`[FileIOManager] Detected YouTube video in playlist loader: ${vidInfo.id}`);
+      await this.player.playlistManager?.addVideoAndPlay(vidInfo);
+      return true;
+    }
+
+    let fetchUrl = url;
+    if (fetchUrl && !fetchUrl.includes('/') && !fetchUrl.includes('.')) {
+      fetchUrl = `playlists/${fetchUrl}.txt`;
+    }
+
+    if (fetchUrl && fetchUrl.startsWith('/') && !fetchUrl.startsWith('//')) {
+      const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+      fetchUrl = window.location.origin + basePath + fetchUrl.substring(1);
+    } else if (fetchUrl && !fetchUrl.startsWith('http')) {
+      fetchUrl = new URL(fetchUrl, window.location.href).href;
+    }
+
+    console.log(`Loading playlist from: ${fetchUrl}`);
+    try {
+      const res = await fetch(fetchUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      let items = [];
+
+      try {
+        const data = JSON.parse(text);
+        const list = Array.isArray(data) ? data : data.playlist;
+        if (Array.isArray(list)) {
+          items = list.map((i) => ({
+            id: i.id,
+            title: i.title || i.id,
+            hasPianoRoll: i.hasPianoRoll,
+            songSettings: i.songSettings,
+            startTime: i.startTime,
+            endTime: i.endTime,
+          }));
+        }
+      } catch (e) {
+        const lines = text.split(/\r?\n/);
+        lines.forEach((l) => {
+          const parsed = PlaylistFormat.parseLine(l);
+          if (parsed) items.push(parsed);
+        });
+      }
+
+      if (items.length > 0) {
+        const finishLoad = (addType) => {
+          this.player.state.settings.lastPlaylistUrl = url;
+          this.player.state.settings.playlistModified = false;
+          this.player._saveSettings();
+
+          this.player._isLoadingPlaylist = true;
+          if (addType === 'replace') {
+            this.player.playlistManager.clear();
+            this.player.playlistManager.addBulk(items, true);
+          } else if (addType === 'append') {
+            this.player.playlistManager.addBulk(items, true);
+          } else if (addType === 'prepend') {
+            this.player.playlistManager.addBulk(items, false);
+          }
+          this.player._isLoadingPlaylist = false;
+
+          this.player.setStatus(`Loaded ${items.length} videos.`, '#4f4');
+          if (this.player.playlistSelectorUI) {
+            this.player.playlistSelectorUI.markUnmodified(url);
+          }
+          if (this.player.leftPanel) this.player.leftPanel.open('playlist');
+        };
+
+        if (
+          forcedAddType === 'replace' ||
+          forcedAddType === 'append' ||
+          forcedAddType === 'prepend'
+        ) {
+          finishLoad(forcedAddType);
+          return true;
+        }
+
+        if (this.player.playlistManager.playlist.length > 0) {
+          UITools.makeDialog({
+            title: 'Load Playlist',
+            content: `Found ${items.length} videos in URL. How would you like to add them?`,
+            width: '350px',
+            appendTo: this.player.rootElement,
+            buttons: [
+              {
+                label: 'Replace',
+                className: 'danger',
+                onClick: (btn, dBox) => {
+                  finishLoad('replace');
+                  dBox.close();
+                },
+              },
+              {
+                label: 'Append (End)',
+                className: 'primary',
+                onClick: (btn, dBox) => {
+                  finishLoad('append');
+                  dBox.close();
+                },
+              },
+              {
+                label: 'Prepend (Start)',
+                className: 'primary',
+                onClick: (btn, dBox) => {
+                  finishLoad('prepend');
+                  dBox.close();
+                },
+              },
+              { label: 'Cancel', onClick: (btn, dBox) => dBox.close() },
+            ],
+          });
+        } else {
+          finishLoad('replace');
+        }
+        return true;
+      } else {
+        this.player.setStatus('No videos found in URL.', '#fa0');
         return false;
       }
+    } catch (err) {
+      console.error('Playlist fetch error:', err);
+      this.player.setStatus(`Failed: ${err.message}`, '#f55');
+      return false;
     }
+  }
+
   async savePlaylistToCloud() {
     if (
       !this.player.playlistManager ||
@@ -325,13 +331,6 @@ class FileIOManager {
         if (this.player.playlistSelectorUI) {
           this.player.playlistSelectorUI.markUnmodified(result.id);
         }
-        if (this.player.leftPanelUI) {
-          const input =
-            this.player.leftPanelUI.audioContainer?.parentElement?.querySelector(
-              'input[placeholder="YouTube URL, ID, or Playlist..."]'
-            );
-          if (input) input.value = result.id;
-        }
         navigator.clipboard.writeText(result.id);
         this.player.setStatus(`Saved! ID: ${result.id} (Copied)`, '#4f4');
       } else {
@@ -344,40 +343,36 @@ class FileIOManager {
   }
 
   async processUrlParameters() {
-      const params = new URLSearchParams(window.location.search);
-      const video = params.get('v') || params.get('video');
-      const titleParam = params.get('title');
-      const shouldPlay = params.get('play') === '1' || params.get('autoplay') === '1';
-      const playlistUrl = params.get('pl') || params.get('playlist');
+    const params = new URLSearchParams(window.location.search);
+    const video = params.get('v') || params.get('video');
+    const titleParam = params.get('title');
+    const shouldPlay = params.get('play') === '1' || params.get('autoplay') === '1';
+    const playlistUrl = params.get('pl') || params.get('playlist');
+    const timeParam = params.get('t') || params.get('start');
 
-      if (playlistUrl) {
-        await this.fetchAndLoadPlaylist(playlistUrl);
-      }
-
-      if (video) {
-        const isUrl = video.includes('/') || video.includes('.');
-        let title = titleParam ? decodeURIComponent(titleParam) : 'Direct Video';
-        if (!titleParam && isUrl) {
-          try {
-            const parts = video.split('/');
-            const file = parts[parts.length - 1];
-            title = file.split('?')[0];
-          } catch (e) {}
-        } else if (!titleParam) {
-          title = `YouTube ${video}`;
-        }
-
-        const idx = this.player.playlistManager.add(video, title, false, shouldPlay);
-
-        setTimeout(() => {
-          const playIdx = idx >= 0 ? idx : this.player.playlistManager.playlist.findIndex(
-            (v) => v.id === video
-          );
-          if (playIdx !== -1 && (shouldPlay || !this.player.gt?.videoPlayer?.isPlaying())) {
-            this.player.playlistManager._triggerPlay(playIdx);
-          }
-        }, 250);
-      }
+    if (playlistUrl) {
+      await this.fetchAndLoadPlaylist(playlistUrl);
     }
-}
 
+    if (video) {
+      const vidInfo = Playlist.extractVideoInfo(video);
+      const cleanId = vidInfo ? vidInfo.id : video;
+      let title = titleParam ? decodeURIComponent(titleParam) : (vidInfo?.title || cleanId);
+      const startTime = timeParam ? Playlist.parseTimeParam(timeParam) : vidInfo?.startTime;
+
+      const idx = this.player.playlistManager.add(cleanId, title, false, shouldPlay);
+      if (startTime !== undefined && startTime !== null && this.player.playlistManager.playlist[idx]) {
+        this.player.playlistManager.playlist[idx].startTime = startTime;
+      }
+
+      setTimeout(() => {
+        const playIdx = idx >= 0 ? idx : this.player.playlistManager.playlist.findIndex(
+          (v) => v.id === cleanId
+        );
+        if (playIdx !== -1 && (shouldPlay || !this.player.gt?.videoPlayer?.isPlaying())) {
+          this.player.playlistManager._triggerPlay(playIdx);
+        }
+      }, 250);
+    }
+  }
+}
