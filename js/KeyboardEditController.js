@@ -85,92 +85,67 @@ class KeyboardEditController {
   }
 
   setupEditKeys() {
-      window.addEventListener('mouseup', (e) => {
-        if (
-          e.target &&
-          e.target.tagName !== 'SELECT' &&
-          ['INPUT', 'BUTTON'].includes(e.target.tagName)
-        ) {
-          if (e.target.type !== 'text' && e.target.type !== 'number') {
-            e.target.blur();
+        window.addEventListener('mouseup', (e) => {
+          if (
+            e.target &&
+            e.target.tagName !== 'SELECT' &&
+            ['INPUT', 'BUTTON'].includes(e.target.tagName)
+          ) {
+            if (e.target.type !== 'text' && e.target.type !== 'number') {
+              e.target.blur();
+            }
           }
-        }
-      });
+        });
 
-      window.addEventListener('keydown', (e) => {
-        const tag = e.target?.tagName;
-        const type = e.target?.type;
-        const isTextInput =
-          tag === 'INPUT' &&
-          ['text', 'number', 'password', 'email', 'search', 'url'].includes(type);
-        if (isTextInput || tag === 'TEXTAREA' || e.target?.isContentEditable) {
-          return;
-        }
-
-        const player = this.player.gt;
-        if (!player) return;
-
-        const key = e.key;
-
-        // 1. Scrubbing (Arrow Left / Arrow Right)
-        if (key === 'ArrowLeft' || key === 'ArrowRight') {
-          if (!e.ctrlKey && !e.metaKey) {
-            e.preventDefault();
-            e.stopPropagation();
-            const curr = player.videoPlayer?.getCurrentRawTime() || 0;
-            const delta = key === 'ArrowLeft' ? -5 : 5;
-            const targetTime = Math.max(0, curr + delta);
-            player.seekTo(targetTime);
-            this.player.setStatus(`Seek: ${Math.floor(targetTime / 60)}:${Math.floor(targetTime % 60).toString().padStart(2, '0')}`, '#4a90e2');
+        // Passive bubble phase so KeyCommandHandler and PopupBox overlays can process commands cleanly
+        window.addEventListener('keydown', (e) => {
+          const tag = e.target?.tagName;
+          const type = e.target?.type;
+          const isTextInput =
+            tag === 'INPUT' &&
+            ['text', 'number', 'password', 'email', 'search', 'url'].includes(type);
+          if (isTextInput || tag === 'TEXTAREA' || e.target?.isContentEditable) {
             return;
           }
-        }
 
-        // 2. Video Volume (Arrow Up / Arrow Down)
-        if (key === 'ArrowUp' || key === 'ArrowDown') {
-          if (!e.ctrlKey && !e.metaKey) {
-            e.preventDefault();
-            e.stopPropagation();
-            let currentVol = this.player.state.settings.videoVolume ?? (player.videoPlayer?.getVolume() ?? 100);
-            const delta = key === 'ArrowUp' ? 5 : -5;
-            const newVol = Math.max(0, Math.min(100, Math.round(currentVol + delta)));
+          const player = this.player.gt;
+          if (!player) return;
 
-            this.player.state.settings.videoVolume = newVol;
-            player.setVideoVolume(newVol);
-            this.player._saveSettings();
+          const key = e.key;
 
-            document.querySelectorAll('.gt-video-vol-slider').forEach(sl => {
-              sl.value = newVol;
-            });
-            this.player.setStatus(`Video Vol: ${newVol}%`, '#4a90e2');
-            return;
+          // 1. Scrubbing (Arrow Left / Arrow Right)
+          if (key === 'ArrowLeft' || key === 'ArrowRight') {
+            if (!e.ctrlKey && !e.metaKey) {
+              e.preventDefault();
+              const curr = player.videoPlayer?.getCurrentRawTime() || 0;
+              const delta = key === 'ArrowLeft' ? -5 : 5;
+              const targetTime = Math.max(0, curr + delta);
+              player.seekTo(targetTime);
+              this.player.setStatus(`Seek: ${Math.floor(targetTime / 60)}:${Math.floor(targetTime % 60).toString().padStart(2, '0')}`, '#4a90e2');
+              return;
+            }
           }
-        }
 
-        const lKey = key.toLowerCase();
-        if (lKey === 's') {
-          e.preventDefault();
-          this.player._triggerSync();
-        } else if (lKey === 'z' && !e.ctrlKey && !e.metaKey) {
-          e.preventDefault();
-          this.player._triggerUndo();
-        } else if (lKey === 'p') {
-          e.preventDefault();
-          if (player.videoPlayer?.isPlaying()) player.pause();
-          else player.play();
-        } else if (lKey === 'b') {
-          e.preventDefault();
-          const curr = player.videoPlayer?.getCurrentRawTime() || 0;
-          player.seekTo(Math.max(0, curr - 10));
-        } else if (e.key >= '0' && e.key <= '9' && !e.ctrlKey && !e.altKey) {
-          e.preventDefault();
-          const dur = player.videoPlayer?.getDuration() || 0;
-          if (dur > 0) player.seekTo((dur * parseInt(e.key) * 10) / 100);
-        } else if (e.key === 'Delete' || e.key === 'Backspace') {
-          e.preventDefault();
-          this.player._triggerDelete();
-        }
-      }, true); // Use capture phase so arrow keys are handled reliably
-    }
+          // 2. Video Volume (Arrow Up / Arrow Down)
+          if (key === 'ArrowUp' || key === 'ArrowDown') {
+            if (!e.ctrlKey && !e.metaKey) {
+              e.preventDefault();
+              let currentVol = this.player.state.settings.videoVolume ?? (player.videoPlayer?.getVolume() ?? 100);
+              const delta = key === 'ArrowUp' ? 5 : -5;
+              const newVol = Math.max(0, Math.min(100, Math.round(currentVol + delta)));
+
+              this.player.state.settings.videoVolume = newVol;
+              player.setVideoVolume(newVol);
+              this.player._saveSettings();
+
+              document.querySelectorAll('.gt-video-vol-slider').forEach(sl => {
+                sl.value = newVol;
+              });
+              this.player.setStatus(`Video Vol: ${newVol}%`, '#4a90e2');
+              return;
+            }
+          }
+        }, false);
+      }
 }
 

@@ -79,7 +79,7 @@
   "styles": [
     "css/youTubePlayer.css"
   ],
-  "processedCountSinceCheckpoint": 0,
+  "processedCountSinceCheckpoint": 4,
   "changedMethods": {
     "css/youTubePlayer.css": "2026-09-08T01:46:09.467Z",
     "js/PlaybackController.js": "2026-10-13T04:51:49.612Z",
@@ -105,8 +105,12 @@
     "js/AppStateManager.js": "2026-10-13T04:51:49.612Z",
     "Luno/app/LunoZipExporter.js": "2026-10-23T02:47:20.120Z",
     "Luno/app/ClientAppUI.js": "2026-10-23T02:47:20.120Z",
-    "Luno/app/LunoProjectTemplates.js": "2026-10-23T02:47:20.120Z"
+    "Luno/app/LunoProjectTemplates.js": "2026-10-23T02:47:20.120Z",
+    "Library/SidePanel.js": "2026-10-31T06:54:29.119Z",
+    "Library/UITools.js": "2026-10-31T06:54:29.119Z",
+    "Library/KeyCommandHandler.js": "2026-10-31T06:54:29.119Z",
+    "Library/PopupBox.js": "2026-10-31T06:54:29.119Z"
   },
-  "lastCheckpointTime": "2026-10-30T07:18:21.917Z",
+  "lastCheckpointTime": "2026-10-31T06:05:03.272Z",
   "pendingCheckpointDescription": "Clean working tree"
 }
