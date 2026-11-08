@@ -122,88 +122,82 @@ class HeaderControlsUI {
   }
 
   _appendVideoVolumeControl(container) {
-      let currentVol = this.player.state.settings.videoVolume ?? 100;
-      
-      if (this.player.gt && this.player.gt.videoPlayer && this.player.gt.videoPlayer.isReady) {
-        currentVol = Math.round(this.player.gt.videoPlayer.getVolume());
-        this.player.state.settings.videoVolume = currentVol;
-      }
-      
-      this._lastTrackedVolume = currentVol;
-      this.player._targetVolume = currentVol; // Curator: Initialize target volume tracker
-
-      const vidVol = makeElement('input', {
-        type: 'range',
-        className: 'gt-video-vol-slider',
-        min: 0,
-        max: 100,
-        value: currentVol,
-        style: 'width:50px; height:3px; cursor:pointer; margin:0;',
-        title: 'Video Volume',
-      });
-      
-      vidVol.oninput = () => {
-        const val = parseInt(vidVol.value, 10);
-        
-        // Curator: Lock the poller from running, and declare our active volume target
-        this.player._volumeChangingLock = Date.now();
-        this.player._targetVolume = val;
-        this._lastTrackedVolume = val;
-
-        if (typeof window.curatorLog === 'function') {
-          window.curatorLog('Volume', `User manually adjusted volume slider to: ${val}%`);
+        let currentVol = this.player.state.settings.videoVolume;
+        if (currentVol === undefined || (currentVol === 0 && !this.player.state.settings.userMuted)) {
+          currentVol = 100;
+          this.player.state.settings.videoVolume = 100;
         }
-        
-        this.player.gt?.setVideoVolume(val);
-        this.player.state.settings.videoVolume = val;
-        this.player._saveSettings();
 
-        document.querySelectorAll('.gt-video-vol-slider').forEach(sl => {
-          if (sl !== vidVol) sl.value = val;
+        this._lastTrackedVolume = currentVol;
+        this.player._targetVolume = currentVol;
+
+        const vidVol = makeElement('input', {
+          type: 'range',
+          className: 'gt-video-vol-slider',
+          min: 0,
+          max: 100,
+          value: currentVol,
+          style: 'width:50px; height:3px; cursor:pointer; margin:0;',
+          title: 'Video Volume',
         });
-      };
-      container.appendChild(vidVol);
 
-      if (this.player._volPoll) clearInterval(this.player._volPoll);
-      
-      this.player._volPoll = setInterval(() => {
-        if (this.player.gt && this.player.gt.videoPlayer && this.player.gt.videoPlayer.isReady) {
-          const actualVol = Math.round(this.player.gt.videoPlayer.getVolume());
-          
-          const isUserSliding = Array.from(document.querySelectorAll('.gt-video-vol-slider')).some(sl => document.activeElement === sl);
-          const isFading = this.player.playbackController && this.player.playbackController.isFadingOut;
-          const isScriptMuted = this.player.gt._scriptMuted;
-          
-          // Curator: Strict 3-second recovery lock post manual volume changes
-          const lastChangeTime = this.player._volumeChangingLock || 0;
-          const isLocked = (Date.now() - lastChangeTime) < 3000;
+        vidVol.oninput = () => {
+          const val = parseInt(vidVol.value, 10);
+          this.player._volumeChangingLock = Date.now();
+          this.player._targetVolume = val;
+          this._lastTrackedVolume = val;
 
-          if (this.player._targetVolume !== undefined) {
-            if (Math.abs(actualVol - this.player._targetVolume) <= 1) {
-              this.player._targetVolume = undefined;
+          this.player.state.settings.userMuted = (val === 0);
+          this.player.gt?.setVideoVolume(val);
+          this.player.state.settings.videoVolume = val;
+          this.player._saveSettings();
+
+          document.querySelectorAll('.gt-video-vol-slider').forEach(sl => {
+            if (sl !== vidVol) sl.value = val;
+          });
+        };
+        container.appendChild(vidVol);
+
+        if (this.player._volPoll) clearInterval(this.player._volPoll);
+
+        this.player._volPoll = setInterval(() => {
+          if (this.player.gt && this.player.gt.videoPlayer && this.player.gt.videoPlayer.isReady) {
+            const vp = this.player.gt.videoPlayer;
+            const actualVol = Math.round(vp.getVolume());
+
+            const isUserSliding = Array.from(document.querySelectorAll('.gt-video-vol-slider')).some(sl => document.activeElement === sl);
+            const isFading = this.player.playbackController && this.player.playbackController.isFadingOut;
+            const isScriptMuted = this.player.gt._scriptMuted;
+
+            const lastChangeTime = this.player._volumeChangingLock || 0;
+            const isLocked = (Date.now() - lastChangeTime) < 3000;
+
+            // If YouTube muted itself unexpectedly or is 0 while our user didn't mute it:
+            if (actualVol === 0 && !this.player.state.settings.userMuted && !isUserSliding && !isScriptMuted && !isFading && !isLocked) {
+              const restoreVol = this.player.state.settings.videoVolume || 100;
+              this.player.gt.setVideoVolume(restoreVol);
+              return;
             }
-          }
 
-          if (actualVol !== this._lastTrackedVolume && !isUserSliding && !isScriptMuted && !isFading && !isLocked && this.player._targetVolume === undefined) {
-            if (typeof window.curatorLog === 'function') {
-              window.curatorLog('Volume', `Sync slider position to native YouTube player volume: ${actualVol}%`, {
-                oldValue: this._lastTrackedVolume,
-                newValue: actualVol
+            if (this.player._targetVolume !== undefined) {
+              if (Math.abs(actualVol - this.player._targetVolume) <= 1) {
+                this.player._targetVolume = undefined;
+              }
+            }
+
+            if (actualVol !== this._lastTrackedVolume && !isUserSliding && !isScriptMuted && !isFading && !isLocked && this.player._targetVolume === undefined) {
+              this._lastTrackedVolume = actualVol;
+              document.querySelectorAll('.gt-video-vol-slider').forEach(sl => {
+                sl.value = actualVol;
               });
-            }
-            
-            this._lastTrackedVolume = actualVol;
-            document.querySelectorAll('.gt-video-vol-slider').forEach(sl => {
-              sl.value = actualVol;
-            });
-            
-            this.player.state.settings.videoVolume = actualVol;
-            this.player._saveSettings();
-          }
-        }
-      }, 1000);
-    }
 
+              this.player.state.settings.videoVolume = actualVol;
+              this.player.state.settings.userMuted = (actualVol === 0);
+              this.player._saveSettings();
+            }
+          }
+        }, 1000);
+      }
   _appendSingleTrackControls(container) {
       container.appendChild(
         makeElement('div', {
@@ -298,93 +292,100 @@ class HeaderControlsUI {
   }
 
   _appendSplitToggleButton(container, splitActive) {
-    const splitBtn = makeElement(
-      'button',
-      {
-        style: `padding:0 6px; font-size:13px; line-height:1; background:${
-          splitActive ? '#1a2a1a' : '#222'
-        }; color:${splitActive ? '#4f4' : '#888'}; border:1px solid ${
-          splitActive ? '#4f4' : '#555'
-        }; border-radius:3px; cursor:pointer; font-family:serif; letter-spacing:-1px; transition:all 0.15s;`,
-        title: splitActive
-          ? 'Tracks are split — click to merge'
-          : 'Smart Split into treble + bass tracks',
-        onclick: () => {
-          if (splitActive) {
-            if (!window.VideoEventQueueClass) return;
-            window.VideoEventQueueClass.pushUndoState();
-            window.VideoEventQueueClass.current.timedEvents.forEach((e) => {
-              if (e.type === 'note') {
-                e.tr = 0;
-                delete e.chordId;
-                delete e.chordRank;
-              }
-            });
-            this.player._updateSongSettings({
-              splitMethod: null,
-              arpEnabled: false,
-            });
-            window.VideoEventQueueClass.notifySubscribers();
-            this.player._refreshVisuals();
-            this.build();
-            if (
-              this.player.leftPanelUI &&
-              typeof this.player.leftPanelUI.refreshAudioUI === 'function'
-            ) {
-              this.player.leftPanelUI.refreshAudioUI();
-            }
-            if (this.player.gt?.synchronizer)
-              this.player.gt.synchronizer.resyncScheduler();
-            this.player.setStatus('Tracks merged.', '#4f4');
-          } else {
-            if (this.player.gt?.instruments) {
-              const t0 = this.player.gt.instruments.tracks[0] || {
-                instrument: 'Piano',
-                volume: 5.0,
-                octaveShift: 0,
-              };
-              this.player.gt.instruments.tracks[1] = {
-                instrument: t0.instrument,
-                volume: t0.volume,
-                octaveShift: t0.octaveShift,
-              };
-            }
-            this.player.pianoLogic.splitTracks(
-              'smart',
-              this.player.state.settings.splitPitch || 60
-            );
-            this.player._updateSongSettings({
-              arpEnabled: true,
-              arpSpread: 30,
-              arpPattern: [0, 1, 2],
-              splitMethod: 'smart',
-              tracks: this.player.gt?.instruments?.tracks,
-            });
-
-            if (window.VideoEventQueueClass) {
-              window.VideoEventQueueClass.findChords(false);
+      const splitBtn = makeElement(
+        'button',
+        {
+          style: `padding:0 6px; font-size:13px; line-height:1; background:${
+            splitActive ? '#1a2a1a' : '#222'
+          }; color:${splitActive ? '#4f4' : '#888'}; border:1px solid ${
+            splitActive ? '#4f4' : '#555'
+          }; border-radius:3px; cursor:pointer; font-family:serif; letter-spacing:-1px; transition:all 0.15s;`,
+          title: splitActive
+            ? 'Tracks are split — click to merge'
+            : 'Smart Split into treble + bass tracks',
+          onclick: () => {
+            if (splitActive) {
+              if (!window.VideoEventQueueClass) return;
+              window.VideoEventQueueClass.pushUndoState();
+              window.VideoEventQueueClass.current.timedEvents.forEach((e) => {
+                if (e.type === 'note') {
+                  e.tr = 0;
+                  delete e.chordId;
+                  delete e.chordRank;
+                }
+              });
+              window.arpEnabled = false;
+              this.player._updateSongSettings({
+                splitMethod: null,
+                arpEnabled: false,
+              });
               window.VideoEventQueueClass.notifySubscribers();
-            }
-            this.player._refreshVisuals();
-            this.build();
-            if (
-              this.player.leftPanelUI &&
-              typeof this.player.leftPanelUI.refreshAudioUI === 'function'
-            ) {
-              this.player.leftPanelUI.refreshAudioUI();
-            }
-            if (this.player.gt?.synchronizer) {
-              this.player.gt.synchronizer.resyncScheduler();
-            }
-            this.player.setStatus('Smart Split applied.', '#4f4');
-          }
-        },
-      },
-      '\u{1D122}\u{1D11E}'
-    );
-    container.appendChild(splitBtn);
-  }
+              this.player._refreshVisuals();
+              this.build();
+              if (
+                this.player.leftPanelUI &&
+                typeof this.player.leftPanelUI.refreshAudioUI === 'function'
+              ) {
+                this.player.leftPanelUI.refreshAudioUI();
+              }
+              if (this.player.gt?.synchronizer)
+                this.player.gt.synchronizer.resyncScheduler();
+              this.player.setStatus('Tracks merged.', '#4f4');
+            } else {
+              if (this.player.gt?.instruments) {
+                const t0 = this.player.gt.instruments.tracks[0] || {
+                  instrument: 'Piano',
+                  volume: 5.0,
+                  octaveShift: 0,
+                };
+                if (!this.player.gt.instruments.tracks[1]) {
+                  this.player.gt.instruments.tracks[1] = {
+                    instrument: 'Vibes',
+                    volume: 3.0,
+                    octaveShift: 0,
+                  };
+                }
+              }
+              const pitch = this.player.state.settings.splitPitch || 60;
+              this.player.pianoLogic.splitTracks('smart', pitch);
+              window.arpEnabled = true;
+              if (window.arpGlobalSpread === undefined || window.arpGlobalSpread === 0) {
+                window.arpGlobalSpread = 89;
+              }
+              if (!window.arpPattern) window.arpPattern = [0, 1, 2];
 
+              this.player._updateSongSettings({
+                arpEnabled: true,
+                arpSpread: window.arpGlobalSpread,
+                arpPattern: window.arpPattern,
+                splitMethod: 'smart',
+                splitPitch: pitch,
+                tracks: this.player.gt?.instruments?.tracks,
+              });
+
+              if (window.VideoEventQueueClass) {
+                window.VideoEventQueueClass.findChords(false);
+                window.VideoEventQueueClass.notifySubscribers();
+              }
+              this.player._refreshVisuals();
+              this.build();
+              if (
+                this.player.leftPanelUI &&
+                typeof this.player.leftPanelUI.refreshAudioUI === 'function'
+              ) {
+                this.player.leftPanelUI.refreshAudioUI();
+              }
+              if (this.player.gt?.synchronizer) {
+                this.player.gt.synchronizer.resyncScheduler();
+              }
+              this.player.setStatus('Smart Split applied.', '#4f4');
+            }
+          },
+        },
+        '\u{1D122}\u{1D11E}'
+      );
+      container.appendChild(splitBtn);
+    }
   _appendSettingsGear(container) {
       container.appendChild(
         makeElement(

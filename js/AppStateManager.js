@@ -5,42 +5,48 @@ class AppStateManager {
   }
 
   loadState() {
-      let settings = {
-        instrumentVolume: 50,
-        transpose: 0,
-        midiEnabled: false,
-        keyboardStyle: '3d',
-      };
-      let geometry = {};
-      let playlistData = null;
+        let settings = {
+          instrumentVolume: 50,
+          videoVolume: 100,
+          transpose: 0,
+          midiEnabled: false,
+          keyboardStyle: '3d',
+          smartAutoArp: true,
+        };
+        let geometry = {};
+        let playlistData = null;
 
-      try {
-        const loadedSettings = JSON.parse(localStorage.getItem('yt_settings'));
-        if (loadedSettings) {
-          settings = { ...settings, ...loadedSettings };
+        try {
+          const loadedSettings = JSON.parse(localStorage.getItem('yt_settings'));
+          if (loadedSettings) {
+            settings = { ...settings, ...loadedSettings };
+          }
+        } catch (e) {}
+
+        // Heal previously corrupted muted settings caused by poller desync
+        if (settings.videoVolume === 0 && !settings.userMuted) {
+          settings.videoVolume = 100;
         }
-      } catch (e) {}
 
-      try {
-        const loadedGeo = JSON.parse(localStorage.getItem('yt_geometry'));
-        if (loadedGeo && Object.keys(loadedGeo).length > 0) geometry = loadedGeo;
-      } catch (e) {}
+        try {
+          const loadedGeo = JSON.parse(localStorage.getItem('yt_geometry'));
+          if (loadedGeo && Object.keys(loadedGeo).length > 0) geometry = loadedGeo;
+        } catch (e) {}
 
-      try {
-        const localPl = JSON.parse(localStorage.getItem('yt_playlist'));
-        if (localPl && Array.isArray(localPl.playlist)) {
-          playlistData = localPl;
+        try {
+          const localPl = JSON.parse(localStorage.getItem('yt_playlist'));
+          if (localPl && Array.isArray(localPl.playlist)) {
+            playlistData = localPl;
+          }
+        } catch (e) {}
+
+        settings.editMode = false;
+        if (settings.keyboardStyle === 'both') {
+          settings.keyboardStyle = '3d';
         }
-      } catch (e) {}
 
-      settings.editMode = false;
-      if (settings.keyboardStyle === 'both') {
-        settings.keyboardStyle = '3d';
+        return { settings, playlistData, geometry };
       }
-
-      return { settings, playlistData, geometry };
-    }
-
   saveState() {
       if (this._saveStateTimer) clearTimeout(this._saveStateTimer);
       this._saveStateTimer = setTimeout(() => {
@@ -85,24 +91,21 @@ class AppStateManager {
     }
 
   updateSongSettings(updates) {
-      if (!this.player.currentPlayItem) return;
-      const veqData = window.VideoEventQueueClass?.current;
-      const hasNotes =
-        veqData &&
-        veqData.timedEvents &&
-        veqData.timedEvents.some((e) => e.type === 'note');
-      if (!hasNotes) return;
+        if (!this.player.currentPlayItem) return;
+        const veqData = window.VideoEventQueueClass?.current;
+        const hasNotes =
+          veqData &&
+          veqData.timedEvents &&
+          veqData.timedEvents.some((e) => e.type === 'note');
+        if (!hasNotes) return;
 
-      const isCurator = typeof window.openCuratorDiagnostics === 'function' && localStorage.getItem('gt_curator_mode') === 'true';
-
-      if (isCurator) {
         if (!this.player.currentPlayItem.songSettings) {
           this.player.currentPlayItem.songSettings = {};
         }
         Object.assign(this.player.currentPlayItem.songSettings, updates);
 
         if (typeof window.curatorLog === 'function') {
-          window.curatorLog('Scope', `Committed local curation settings directly to playlist item: ${this.player.currentPlayItem.title}`, updates);
+          window.curatorLog('Scope', `Updated song settings: ${this.player.currentPlayItem.title}`, updates);
         }
 
         if (this.player.playlistSelectorUI) {
@@ -110,13 +113,7 @@ class AppStateManager {
         }
 
         this.saveState();
-      } else {
-        if (typeof window.curatorLog === 'function') {
-          window.curatorLog('Scope', `Session/Global Override applied (Local playlist state preserved)`, updates);
-        }
       }
-    }
-
   async _getDB() {
     return new Promise((resolve, reject) => {
       const req = indexedDB.open('AardvarkPlaylistDB', 1);

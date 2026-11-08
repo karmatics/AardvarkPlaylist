@@ -79,10 +79,10 @@
   "styles": [
     "css/youTubePlayer.css"
   ],
-  "processedCountSinceCheckpoint": 0,
+  "processedCountSinceCheckpoint": 4,
   "changedMethods": {
     "css/youTubePlayer.css": "2026-09-08T01:46:09.467Z",
-    "js/PlaybackController.js": "2026-10-13T04:51:49.612Z",
+    "js/PlaybackController.js": "2026-11-08T03:07:35.290Z",
     "js/ui/SettingsDialogUI.js": "2026-09-08T01:46:09.467Z",
     "piano3d/Piano3DApp.js": "2026-09-08T01:46:09.467Z",
     "js/CoopManager.js": "2026-09-29T04:01:18.530Z",
@@ -101,16 +101,17 @@
     "AardvarkExtension/manifest.json": "2026-09-29T04:01:18.530Z",
     "glowtunes/js/VideoEventQueue.js": "2026-10-06T06:43:43.370Z",
     "js/ui/AdvancedToolsUI.js": "2026-10-06T06:43:43.370Z",
-    "Library/VideoPlayer.js": "2026-10-13T04:51:49.612Z",
-    "js/AppStateManager.js": "2026-10-13T04:51:49.612Z",
+    "Library/VideoPlayer.js": "2026-11-08T03:07:35.290Z",
+    "js/AppStateManager.js": "2026-11-08T03:07:35.290Z",
     "Luno/app/LunoZipExporter.js": "2026-10-23T02:47:20.120Z",
     "Luno/app/ClientAppUI.js": "2026-10-23T02:47:20.120Z",
     "Luno/app/LunoProjectTemplates.js": "2026-10-23T02:47:20.120Z",
     "Library/SidePanel.js": "2026-10-31T06:54:29.119Z",
     "Library/UITools.js": "2026-10-31T06:54:29.119Z",
     "Library/KeyCommandHandler.js": "2026-10-31T06:54:29.119Z",
-    "Library/PopupBox.js": "2026-10-31T06:54:29.119Z"
+    "Library/PopupBox.js": "2026-10-31T06:54:29.119Z",
+    "js/ui/HeaderControlsUI.js": "2026-11-08T03:07:35.290Z"
   },
-  "lastCheckpointTime": "2026-11-07T22:19:33.840Z",
+  "lastCheckpointTime": "2026-11-07T22:19:36.746Z",
   "pendingCheckpointDescription": "Clean working tree"
 }
