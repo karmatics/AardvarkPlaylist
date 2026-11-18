@@ -5,48 +5,58 @@ class AppStateManager {
   }
 
   loadState() {
-        let settings = {
-          instrumentVolume: 50,
-          videoVolume: 100,
-          transpose: 0,
-          midiEnabled: false,
-          keyboardStyle: '3d',
-          smartAutoArp: true,
-        };
-        let geometry = {};
-        let playlistData = null;
+      let settings = {
+        instrumentVolume: 50,
+        videoVolume: 100,
+        transpose: 0,
+        midiEnabled: false,
+        keyboardStyle: '3d',
+        smartAutoArp: true,
+        lastTimerMinutes: 30,
+      };
+      let geometry = {};
+      let playlistData = null;
 
-        try {
-          const loadedSettings = JSON.parse(localStorage.getItem('yt_settings'));
-          if (loadedSettings) {
-            settings = { ...settings, ...loadedSettings };
-          }
-        } catch (e) {}
-
-        // Heal previously corrupted muted settings caused by poller desync
-        if (settings.videoVolume === 0 && !settings.userMuted) {
-          settings.videoVolume = 100;
+      try {
+        const loadedSettings = JSON.parse(localStorage.getItem('yt_settings'));
+        if (loadedSettings) {
+          settings = { ...settings, ...loadedSettings };
         }
+      } catch (e) {}
 
-        try {
-          const loadedGeo = JSON.parse(localStorage.getItem('yt_geometry'));
-          if (loadedGeo && Object.keys(loadedGeo).length > 0) geometry = loadedGeo;
-        } catch (e) {}
-
-        try {
-          const localPl = JSON.parse(localStorage.getItem('yt_playlist'));
-          if (localPl && Array.isArray(localPl.playlist)) {
-            playlistData = localPl;
-          }
-        } catch (e) {}
-
-        settings.editMode = false;
-        if (settings.keyboardStyle === 'both') {
-          settings.keyboardStyle = '3d';
-        }
-
-        return { settings, playlistData, geometry };
+      // Heal previously corrupted muted settings caused by poller desync
+      if (settings.videoVolume === 0 && !settings.userMuted) {
+        settings.videoVolume = 100;
       }
+
+      // Clear stale expired sleep timers from a previous session so playback doesn't stop unexpectedly
+      if (
+        settings.playbackMode === 'timer' &&
+        (!settings.playbackStopTime || settings.playbackStopTime <= Date.now())
+      ) {
+        settings.playbackStopTime = null;
+        settings.playbackMode = 'continuous';
+      }
+
+      try {
+        const loadedGeo = JSON.parse(localStorage.getItem('yt_geometry'));
+        if (loadedGeo && Object.keys(loadedGeo).length > 0) geometry = loadedGeo;
+      } catch (e) {}
+
+      try {
+        const localPl = JSON.parse(localStorage.getItem('yt_playlist'));
+        if (localPl && Array.isArray(localPl.playlist)) {
+          playlistData = localPl;
+        }
+      } catch (e) {}
+
+      settings.editMode = false;
+      if (settings.keyboardStyle === 'both') {
+        settings.keyboardStyle = '3d';
+      }
+
+      return { settings, playlistData, geometry };
+    }
   saveState() {
       if (this._saveStateTimer) clearTimeout(this._saveStateTimer);
       this._saveStateTimer = setTimeout(() => {

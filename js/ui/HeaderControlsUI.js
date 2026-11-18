@@ -88,39 +88,40 @@ class HeaderControlsUI {
     }
 
   _buildVideoVolumeOnly() {
-    const container = makeElement('div', {
-      style: 'display:flex; align-items:center; gap:6px;'
-    });
-    this._appendVideoVolumeControl(container);
-    this.player.headerControls.appendChild(container);
-  }
-
-  _buildCenterControls(splitActive) {
-    const center = makeElement('div', {
-      style: 'display:flex; align-items:center; gap:6px;',
-    });
-
-    this._appendVideoVolumeControl(center);
-
-    if (!splitActive) {
-      this._appendSingleTrackControls(center);
+      const container = makeElement('div', {
+        style: 'display:flex; align-items:center; gap:6px;',
+      });
+      this._appendVideoVolumeControl(container);
+      this._appendSleepTimerButton(container);
+      this.player.headerControls.appendChild(container);
     }
 
-    this._appendAutoplayControl(center);
+  _buildCenterControls(splitActive) {
+      const center = makeElement('div', {
+        style: 'display:flex; align-items:center; gap:6px;',
+      });
 
-    // --- TRANSPOSE CONTROL ---
-    this._appendTransposeControl(center);
+      this._appendVideoVolumeControl(center);
 
-    center.appendChild(
-      makeElement('div', { style: 'width:1px; height:12px; background:#444;' })
-    );
+      if (!splitActive) {
+        this._appendSingleTrackControls(center);
+      }
 
-    this._appendSplitToggleButton(center, splitActive);
-    this._appendSettingsGear(center);
+      this._appendAutoplayControl(center);
 
-    this.player.headerControls.appendChild(center);
-  }
+      // --- TRANSPOSE CONTROL ---
+      this._appendTransposeControl(center);
 
+      center.appendChild(
+        makeElement('div', { style: 'width:1px; height:12px; background:#444;' })
+      );
+
+      this._appendSplitToggleButton(center, splitActive);
+      this._appendSleepTimerButton(center);
+      this._appendSettingsGear(center);
+
+      this.player.headerControls.appendChild(center);
+    }
   _appendVideoVolumeControl(container) {
         let currentVol = this.player.state.settings.videoVolume;
         if (currentVol === undefined || (currentVol === 0 && !this.player.state.settings.userMuted)) {
@@ -870,53 +871,54 @@ class HeaderControlsUI {
     }
 
   buildFullscreenToolbar(container) {
-    const veqData = window.VideoEventQueueClass?.current;
-    const hasNotes =
-      veqData &&
-      veqData.timedEvents &&
-      veqData.timedEvents.some((e) => e.type === 'note');
-    let hasTrack1 = false;
-    if (hasNotes && veqData.timedEvents) {
-      hasTrack1 = veqData.timedEvents.some(
-        (e) => e.type === 'note' && e.tr === 1
-      );
-    }
+      const veqData = window.VideoEventQueueClass?.current;
+      const hasNotes =
+        veqData &&
+        veqData.timedEvents &&
+        veqData.timedEvents.some((e) => e.type === 'note');
+      let hasTrack1 = false;
+      if (hasNotes && veqData.timedEvents) {
+        hasTrack1 = veqData.timedEvents.some(
+          (e) => e.type === 'note' && e.tr === 1
+        );
+      }
 
-    const splitActive =
-      hasTrack1 ||
-      window.arpEnabled ||
-      !!this.player.currentPlayItem?.songSettings?.splitMethod;
+      const splitActive =
+        hasTrack1 ||
+        window.arpEnabled ||
+        !!this.player.currentPlayItem?.songSettings?.splitMethod;
 
-    if (!hasNotes) {
+      if (!hasNotes) {
+        this._appendVideoVolumeControl(container);
+        this._appendSleepTimerButton(container);
+        return;
+      }
+
       this._appendVideoVolumeControl(container);
-      return;
+
+      container.appendChild(
+        makeElement('div', {
+          style: 'width:1px; height:14px; background:#444;',
+        })
+      );
+
+      if (!splitActive) {
+        this._appendSingleTrackControls(container);
+      }
+
+      this._appendAutoplayControl(container);
+      this._appendTransposeControl(container);
+
+      container.appendChild(
+        makeElement('div', {
+          style: 'width:1px; height:14px; background:#444;',
+        })
+      );
+
+      this._appendSplitToggleButton(container, splitActive);
+      this._appendSleepTimerButton(container);
+      this._appendSettingsGear(container);
     }
-
-    this._appendVideoVolumeControl(container);
-
-    container.appendChild(
-      makeElement('div', {
-        style: 'width:1px; height:14px; background:#444;',
-      })
-    );
-
-    if (!splitActive) {
-      this._appendSingleTrackControls(container);
-    }
-
-    this._appendAutoplayControl(container);
-    this._appendTransposeControl(container);
-
-    container.appendChild(
-      makeElement('div', {
-        style: 'width:1px; height:14px; background:#444;',
-      })
-    );
-
-    this._appendSplitToggleButton(container, splitActive);
-    this._appendSettingsGear(container);
-  }
-
   _createOctaveUI(trackId) {
     const wrap = makeElement('div', {
       style: 'display:flex; align-items:center; gap:2px; margin-left:4px;',
@@ -1066,5 +1068,67 @@ class HeaderControlsUI {
     // Intentionally left blank. The Piano Style dropdown has been removed
     // from the header controls and moved to the Options Key Command menu.
   }
+
+  _appendSleepTimerButton(container) {
+      const btn = makeElement(
+        'button',
+        {
+          className: 'dialog-button gt-sleep-timer-badge',
+          title: 'Sleep Timer (Click to adjust)',
+          style:
+            'padding:2px 7px; font-size:11px; font-weight:700; border-radius:4px; cursor:pointer; display:flex; align-items:center; gap:4px; font-family:monospace;',
+          onclick: () => {
+            this.player.leftPanelUI?.openSleepTimerDialog?.();
+          },
+        },
+        '🌙'
+      );
+
+      this._syncTimerBadgeEl(btn);
+      container.appendChild(btn);
+
+      const intervalId = setInterval(() => {
+        if (!btn.isConnected) {
+          clearInterval(intervalId);
+          return;
+        }
+        this._syncTimerBadgeEl(btn);
+      }, 1000);
+    }
+
+  _syncTimerBadgeEl(btn) {
+      if (!btn) return;
+      const s = this.player.state?.settings || {};
+      if (s.playbackMode === 'timer' && s.playbackStopTime) {
+        const diff = s.playbackStopTime - Date.now();
+        if (diff > 0) {
+          const totalSecs = Math.ceil(diff / 1000);
+          const hrs = Math.floor(totalSecs / 3600);
+          const mins = Math.floor((totalSecs % 3600) / 60);
+          const secs = totalSecs % 60;
+          const txt =
+            hrs > 0
+              ? `${hrs}:${mins.toString().padStart(2, '0')}:${secs
+                  .toString()
+                  .padStart(2, '0')}`
+              : `${mins}:${secs.toString().padStart(2, '0')}`;
+          btn.textContent = `🌙 ${txt}`;
+          btn.style.background = '#1b4332';
+          btn.style.borderColor = '#4ade80';
+          btn.style.color = '#4ade80';
+          return;
+        }
+      }
+      btn.textContent = '🌙';
+      btn.style.background = '#222';
+      btn.style.borderColor = '#444';
+      btn.style.color = '#aaa';
+    }
+
+  updateTimerBadges() {
+      document.querySelectorAll('.gt-sleep-timer-badge').forEach((btn) => {
+        this._syncTimerBadgeEl(btn);
+      });
+    }
 }
 

@@ -693,8 +693,15 @@ class GlowTunesKeys {
         if (player.gt?.videoPlayer?.isPlaying()) {
           player.gt.pause();
           showBox('Pause');
-        } else {
-          player.gt?.play();
+        } else if (player.gt?.videoPlayer) {
+          player.gt.play();
+          showBox('Play');
+        } else if (player.playlistManager?.playlist?.length > 0) {
+          const idx =
+            player.playlistManager.currentIndex >= 0
+              ? player.playlistManager.currentIndex
+              : 0;
+          player.playlistManager._triggerPlay(idx);
           showBox('Play');
         }
       });
@@ -709,41 +716,59 @@ class GlowTunesKeys {
       });
 
       const changeVideoVol = (delta) => {
-        let v = player.state.settings.videoVolume ?? (player.gt?.videoPlayer?.getVolume() ?? 100);
-        v = Math.max(0, Math.min(100, v + delta));
+        let v =
+          player.state.settings.videoVolume ??
+          player.gt?.videoPlayer?.getVolume() ??
+          100;
+        v = Math.max(0, Math.min(100, Math.round(v + delta)));
         player._volumeChangingLock = Date.now();
 
         if (player.gt) {
           player.gt.setVideoVolume(v);
         }
 
+        player.state.settings.userMuted = v === 0;
         player.state.settings.videoVolume = v;
         player._saveSettings();
 
-        document.querySelectorAll('.gt-video-vol-slider').forEach(sl => {
+        document.querySelectorAll('.gt-video-vol-slider').forEach((sl) => {
           sl.value = v;
         });
-        showBox(`Video Vol: ${Math.round(v)}%`);
+        showBox(`Video Vol: ${v}%`);
       };
 
-      // Arrow Right (39): Scrub forward by default, volume if Ctrl held
+      const seekBy = (deltaSec) => {
+        const vp = player.gt?.videoPlayer;
+        if (!vp) return;
+        const now = Date.now();
+        const rawTime = vp.getCurrentRawTime() || 0;
+        const baseTime =
+          player._lastArrowSeekAt && now - player._lastArrowSeekAt < 650
+            ? player._lastArrowSeekTarget
+            : rawTime;
+        const dur = vp.getDuration() || 0;
+        let target = Math.max(0, baseTime + deltaSec);
+        if (dur > 0) target = Math.min(dur, target);
+        player._lastArrowSeekAt = now;
+        player._lastArrowSeekTarget = target;
+
+        player.gt.seekTo(target);
+        const m = Math.floor(target / 60);
+        const s = Math.floor(target % 60);
+        const timeStr = `${m}:${s.toString().padStart(2, '0')}`;
+        showBox(`${deltaSec > 0 ? '+' : ''}${deltaSec}s (${timeStr})`);
+      };
+
+      // Arrow Right (39): Seek forward +5s by default, Video Volume if Ctrl held
       kch.addCommand(39, (e) => {
         if (e && (e.ctrlKey || e.metaKey)) changeVideoVol(+5);
-        else {
-          const cur = player.gt?.videoPlayer?.getCurrentRawTime() || 0;
-          player.gt?.seekTo(cur + 5);
-          showBox('+5s');
-        }
+        else seekBy(+5);
       });
 
-      // Arrow Left (37): Scrub backward by default, volume if Ctrl held
+      // Arrow Left (37): Seek backward -5s by default, Video Volume if Ctrl held
       kch.addCommand(37, (e) => {
         if (e && (e.ctrlKey || e.metaKey)) changeVideoVol(-5);
-        else {
-          const cur = player.gt?.videoPlayer?.getCurrentRawTime() || 0;
-          player.gt?.seekTo(Math.max(0, cur - 5));
-          showBox('-5s');
-        }
+        else seekBy(-5);
       });
 
       // Arrow Up (38): Video volume by default (+5%), Instrument volume if Ctrl held

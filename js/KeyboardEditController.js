@@ -7,42 +7,51 @@ class KeyboardEditController {
   }
 
   setupGlobalSyncKeys() {
-    window.addEventListener(
-      'keydown',
-      (e) => {
-        if (
-          e.target.tagName === 'INPUT' ||
-          e.target.tagName === 'TEXTAREA' ||
-          e.target.isContentEditable
-        )
-          return;
+      window.addEventListener(
+        'keydown',
+        (e) => {
+          if (
+            typeof KeyCommandHandler !== 'undefined' &&
+            KeyCommandHandler.isEditableTarget &&
+            KeyCommandHandler.isEditableTarget(e.target)
+          ) {
+            return;
+          }
+          if (
+            e.target?.tagName === 'TEXTAREA' ||
+            e.target?.isContentEditable ||
+            (e.target?.tagName === 'INPUT' &&
+              !['range', 'checkbox', 'radio', 'button'].includes(
+                (e.target.type || 'text').toLowerCase()
+              ))
+          ) {
+            return;
+          }
 
-        // Purely display the global keystroke HUD (Logic is handled by KeyCommandHandler now)
-        const isModifierOnly = [
-          'Shift',
-          'Control',
-          'Alt',
-          'Meta',
-          'CapsLock',
-        ].includes(e.key);
-        if (!isModifierOnly) {
-          let keyName = e.key === ' ' ? 'Space' : e.key;
-          if (keyName.length === 1) keyName = keyName.toUpperCase();
+          const isModifierOnly = [
+            'Shift',
+            'Control',
+            'Alt',
+            'Meta',
+            'CapsLock',
+          ].includes(e.key);
+          if (!isModifierOnly) {
+            let keyName = e.key === ' ' ? 'Space' : e.key;
+            if (keyName.length === 1) keyName = keyName.toUpperCase();
 
-          const mods = [];
-          if (e.ctrlKey) mods.push('Ctrl');
-          if (e.metaKey) mods.push('Meta');
-          if (e.altKey) mods.push('Alt');
-          if (e.shiftKey && keyName.length > 1) mods.push('Shift');
-          const fullKey =
-            mods.length > 0 ? `${mods.join(' + ')} + ${keyName}` : keyName;
-          this.showKeystroke(fullKey);
-        }
-      },
-      true
-    );
-  }
-
+            const mods = [];
+            if (e.ctrlKey) mods.push('Ctrl');
+            if (e.metaKey) mods.push('Meta');
+            if (e.altKey) mods.push('Alt');
+            if (e.shiftKey && keyName.length > 1) mods.push('Shift');
+            const fullKey =
+              mods.length > 0 ? `${mods.join(' + ')} + ${keyName}` : keyName;
+            this.showKeystroke(fullKey);
+          }
+        },
+        true
+      );
+    }
   showKeystroke(keyStr) {
     if (!this.player.videoDialog || !this.player.videoDialog.header) return;
 
@@ -85,67 +94,28 @@ class KeyboardEditController {
   }
 
   setupEditKeys() {
-        window.addEventListener('mouseup', (e) => {
-          if (
-            e.target &&
-            e.target.tagName !== 'SELECT' &&
-            ['INPUT', 'BUTTON'].includes(e.target.tagName)
-          ) {
-            if (e.target.type !== 'text' && e.target.type !== 'number') {
-              e.target.blur();
-            }
+      if (this._editKeysBound) return;
+      this._editKeysBound = true;
+
+      window.addEventListener('mouseup', (e) => {
+        if (
+          e.target &&
+          e.target.tagName !== 'SELECT' &&
+          ['INPUT', 'BUTTON'].includes(e.target.tagName)
+        ) {
+          const t = (e.target.type || 'text').toLowerCase();
+          if (['range', 'checkbox', 'radio', 'button', 'submit'].includes(t) || e.target.tagName === 'BUTTON') {
+            e.target.blur();
           }
-        });
+        }
+      });
 
-        // Passive bubble phase so KeyCommandHandler and PopupBox overlays can process commands cleanly
-        window.addEventListener('keydown', (e) => {
-          const tag = e.target?.tagName;
-          const type = e.target?.type;
-          const isTextInput =
-            tag === 'INPUT' &&
-            ['text', 'number', 'password', 'email', 'search', 'url'].includes(type);
-          if (isTextInput || tag === 'TEXTAREA' || e.target?.isContentEditable) {
-            return;
-          }
-
-          const player = this.player.gt;
-          if (!player) return;
-
-          const key = e.key;
-
-          // 1. Scrubbing (Arrow Left / Arrow Right)
-          if (key === 'ArrowLeft' || key === 'ArrowRight') {
-            if (!e.ctrlKey && !e.metaKey) {
-              e.preventDefault();
-              const curr = player.videoPlayer?.getCurrentRawTime() || 0;
-              const delta = key === 'ArrowLeft' ? -5 : 5;
-              const targetTime = Math.max(0, curr + delta);
-              player.seekTo(targetTime);
-              this.player.setStatus(`Seek: ${Math.floor(targetTime / 60)}:${Math.floor(targetTime % 60).toString().padStart(2, '0')}`, '#4a90e2');
-              return;
-            }
-          }
-
-          // 2. Video Volume (Arrow Up / Arrow Down)
-          if (key === 'ArrowUp' || key === 'ArrowDown') {
-            if (!e.ctrlKey && !e.metaKey) {
-              e.preventDefault();
-              let currentVol = this.player.state.settings.videoVolume ?? (player.videoPlayer?.getVolume() ?? 100);
-              const delta = key === 'ArrowUp' ? 5 : -5;
-              const newVol = Math.max(0, Math.min(100, Math.round(currentVol + delta)));
-
-              this.player.state.settings.videoVolume = newVol;
-              player.setVideoVolume(newVol);
-              this.player._saveSettings();
-
-              document.querySelectorAll('.gt-video-vol-slider').forEach(sl => {
-                sl.value = newVol;
-              });
-              this.player.setStatus(`Video Vol: ${newVol}%`, '#4a90e2');
-              return;
-            }
-          }
-        }, false);
-      }
+      // Blur <select> immediately after choosing an option so global hotkeys resume working
+      window.addEventListener('change', (e) => {
+        if (e.target && e.target.tagName === 'SELECT') {
+          e.target.blur();
+        }
+      });
+    }
 }
 

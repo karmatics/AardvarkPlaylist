@@ -504,26 +504,32 @@ class PlaybackController {
         }
       }, 400);
     }
+
   startFadeOutAndStop() {
       if (this.isFadingOut) return;
       this.isFadingOut = true;
 
-      const originalVidVol = this.player.gt && this.player.gt.videoPlayer ? this.player.gt.videoPlayer.getVolume() : 100;
+      const originalVidVol =
+        this.player.gt && this.player.gt.videoPlayer
+          ? this.player.gt.videoPlayer.getVolume()
+          : 100;
       this.fadeOriginalVidVol = originalVidVol;
-      
-      // Normalize from 0-100 range to 0.0-1.0 range expected by the audio engine
+
       const originalInstVol =
         this.player.state.settings.instrumentVolume !== undefined
           ? this.player.state.settings.instrumentVolume / 100
           : 0.5;
 
-      let steps = 100;
+      const steps = 100;
       let currentStep = 0;
 
-      this.player.setStatus('Timer finished. Fading out...', '#4a90e2');
+      this.player.setStatus('Sleep timer finished. Fading out...', '#4a90e2');
 
       this.player.state.settings.playbackStopTime = null;
+      this.player.state.settings.playbackMode = 'continuous';
       this.player._saveState();
+      this.player.leftPanelUI?.refreshTimerUI?.();
+      this.player.headerControlsUI?.updateTimerBadges?.();
 
       this.fadeInterval = setInterval(() => {
         currentStep++;
@@ -536,6 +542,7 @@ class PlaybackController {
 
         if (currentStep >= steps) {
           clearInterval(this.fadeInterval);
+          this.fadeInterval = null;
           if (this.player.gt) {
             this.player.gt.pause();
             this.player.gt.setVideoVolume(originalVidVol);
@@ -546,9 +553,20 @@ class PlaybackController {
         }
       }, 100);
     }
-
   handlePlayerState(s) {
       const vp = this.player.gt?.videoPlayer;
+
+      // Return keyboard focus from YouTube's iframe after play/pause/ready so global hotkeys keep working
+      if (
+        ['play', 'playing', 'pause', 'paused', 'ready'].includes(s.type) &&
+        document.activeElement &&
+        document.activeElement.tagName === 'IFRAME'
+      ) {
+        try {
+          document.activeElement.blur();
+          window.focus();
+        } catch (e) {}
+      }
 
       if (s.type === 'play' || s.type === 'playing') {
         if (this.playEnforcer) {
@@ -558,7 +576,10 @@ class PlaybackController {
 
         if (vp && !this.player.gt._scriptMuted && !this.isFadingOut) {
           let savedVol = this.player.state.settings.videoVolume;
-          if (savedVol === undefined || (savedVol === 0 && !this.player.state.settings.userMuted)) {
+          if (
+            savedVol === undefined ||
+            (savedVol === 0 && !this.player.state.settings.userMuted)
+          ) {
             savedVol = 100;
             this.player.state.settings.videoVolume = 100;
           }
@@ -585,7 +606,10 @@ class PlaybackController {
 
       if (s.type === 'ready') {
         let savedVol = this.player.state.settings.videoVolume;
-        if (savedVol === undefined || (savedVol === 0 && !this.player.state.settings.userMuted)) {
+        if (
+          savedVol === undefined ||
+          (savedVol === 0 && !this.player.state.settings.userMuted)
+        ) {
           savedVol = 100;
           this.player.state.settings.videoVolume = 100;
         }
@@ -597,7 +621,10 @@ class PlaybackController {
         this.player._applyDisplayModeAfterLoad(style);
         this.player.headerControlsUI.build();
 
-        if (this.player.leftPanelUI && typeof this.player.leftPanelUI.refreshGeometryUI === 'function') {
+        if (
+          this.player.leftPanelUI &&
+          typeof this.player.leftPanelUI.refreshGeometryUI === 'function'
+        ) {
           this.player.leftPanelUI.refreshGeometryUI();
         }
       }
@@ -624,10 +651,14 @@ class PlaybackController {
           }
           if (songSet.arpEnabled !== undefined) {
             window.arpEnabled = !!songSet.arpEnabled;
-            if (songSet.arpSpread !== undefined) window.arpGlobalSpread = songSet.arpSpread;
-            if (songSet.arpPattern !== undefined) window.arpPattern = songSet.arpPattern;
-            if (songSet.arpAnchor !== undefined) window.arpAnchor = songSet.arpAnchor;
-            if (songSet.arpLen !== undefined) window.arpGlobalLenFactor = songSet.arpLen;
+            if (songSet.arpSpread !== undefined)
+              window.arpGlobalSpread = songSet.arpSpread;
+            if (songSet.arpPattern !== undefined)
+              window.arpPattern = songSet.arpPattern;
+            if (songSet.arpAnchor !== undefined)
+              window.arpAnchor = songSet.arpAnchor;
+            if (songSet.arpLen !== undefined)
+              window.arpGlobalLenFactor = songSet.arpLen;
           }
         }
         if (this.player.headerControlsUI) this.player.headerControlsUI.build();
@@ -645,7 +676,10 @@ class PlaybackController {
           const stopTime = this.player.state.settings.playbackStopTime;
           if (stopTime && Date.now() >= stopTime) {
             this.player.state.settings.playbackStopTime = null;
+            this.player.state.settings.playbackMode = 'continuous';
             this.player._saveState();
+            this.player.leftPanelUI?.refreshTimerUI?.();
+            this.player.headerControlsUI?.updateTimerBadges?.();
           } else {
             this.player.playlistManager?.playNext();
           }

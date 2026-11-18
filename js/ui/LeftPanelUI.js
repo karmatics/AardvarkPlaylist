@@ -150,115 +150,18 @@ class LeftPanelUI {
   }
 
   _buildPlaylistControls(container) {
-      const timerBar = makeElement('div', {
-        style:
-          'display:flex; align-items:center; gap:8px; margin-bottom:10px; padding:6px; background:#222; border-radius:4px; border:1px solid #333;',
+      this.timerContainer = makeElement('div', {
+        style: 'margin-bottom:10px;',
       });
-
-      const pbSelect = makeElement('select', {
-        style:
-          'flex:1; font-size:10px; background:#111; color:#eee; border:1px solid #444; padding:2px;',
-        title: 'Choose what happens when the video ends.',
-        onchange: (e) => {
-          const val = e.target.value;
-          this.player.state.settings.playbackMode = val;
-
-          if (val !== 'timer') {
-            this.player.state.settings.playbackStopTime = null;
-          } else {
-            this.player.state.settings.playbackStopTime = Date.now() + 30 * 60000;
-          }
-          this.player._saveState();
-          this.build();
-        },
-      });
-
-      [
-        { v: 'continuous', l: 'Loop / Play Next' },
-        { v: 'stop_one', l: 'Stop at End' },
-        { v: 'timer', l: 'Stop on Timer...' },
-      ].forEach((m) => {
-        const opt = makeElement('option', { value: m.v }, m.l);
-        if (this.player.state.settings.playbackMode === m.v) opt.selected = true;
-        pbSelect.appendChild(opt);
-      });
-
-      timerBar.appendChild(pbSelect);
-
-      if (this.player.state.settings.playbackMode === 'timer') {
-        const minInput = makeElement('input', {
-          type: 'number',
-          value: '30',
-          style:
-            'width:30px; font-size:10px; background:#111; color:#fff; border:1px solid #444; padding:2px; text-align:center;',
-        });
-
-        const setBtn = makeElement(
-          'button',
-          {
-            className: 'dialog-button',
-            style: 'padding:2px 6px; font-size:9px;',
-            onclick: () => {
-              const m = parseInt(minInput.value) || 30;
-              this.player.state.settings.playbackStopTime =
-                Date.now() + m * 60000;
-              this.player._saveState();
-              updateCountdown();
-            },
-          },
-          'Set'
-        );
-
-        const countdownDisplay = makeElement(
-          'div',
-          {
-            style:
-              'font-size:10px; color:#4f4; font-family:monospace; min-width:40px; text-align:right;',
-          },
-          '--:--'
-        );
-
-        const updateCountdown = () => {
-          const stopTime = this.player.state.settings.playbackStopTime;
-          if (!stopTime) {
-            countdownDisplay.textContent = 'OFF';
-            countdownDisplay.style.color = '#888';
-            return;
-          }
-          const diff = stopTime - Date.now();
-          if (diff <= 0) {
-            countdownDisplay.textContent = '00:00';
-            countdownDisplay.style.color = '#f55';
-          } else {
-            const mins = Math.floor(diff / 60000);
-            const secs = Math.floor((diff % 60000) / 1000);
-            countdownDisplay.textContent = `${mins}:${secs
-              .toString()
-              .padStart(2, '0')}`;
-            countdownDisplay.style.color = '#4f4';
-          }
-        };
-
-        updateCountdown();
-        if (this._timerInterval) clearInterval(this._timerInterval);
-        this._timerInterval = setInterval(updateCountdown, 1000);
-
-        timerBar.append(
-          minInput,
-          makeElement('span', { style: 'font-size:9px;color:#888' }, 'm'),
-          setBtn,
-          countdownDisplay
-        );
-      }
-
-      container.appendChild(timerBar);
+      container.appendChild(this.timerContainer);
+      this._renderTimerControls();
 
       const listWrapper = makeElement('div', {
         style: 'flex:1; display:flex; flex-direction:column; min-height:200px;',
       });
       container.appendChild(listWrapper);
 
-      let initialUrl = this.player.state.settings.lastPlaylistUrl;
+      const initialUrl = this.player.state.settings.lastPlaylistUrl;
 
       this.player.playlistManager = new Playlist(listWrapper, {
         initialUrl: initialUrl || '',
@@ -279,7 +182,11 @@ class LeftPanelUI {
 
       // Restore cached playlist data synchronously if available
       const cachedData = this.player.state.playlistData;
-      if (cachedData && Array.isArray(cachedData.playlist) && cachedData.playlist.length > 0) {
+      if (
+        cachedData &&
+        Array.isArray(cachedData.playlist) &&
+        cachedData.playlist.length > 0
+      ) {
         this.player.playlistManager.load(cachedData);
       } else if (initialUrl && !this.player.state.settings.playlistModified) {
         this.player._fetchAndLoadPlaylist(initialUrl, 'replace');
@@ -1235,5 +1142,515 @@ class LeftPanelUI {
       );
     }
 
+  refreshTimerUI() {
+      if (this.timerContainer && this.timerContainer.isConnected) {
+        this._renderTimerControls();
+      }
+      if (this._sleepTimerDialogBody && this._sleepTimerDialogBody.isConnected) {
+        this._renderSleepTimerDialogBody(this._sleepTimerDialogBody);
+      }
+      this.player.headerControlsUI?.updateTimerBadges?.();
+    }
+
+  _formatTimerRemaining(diffMs) {
+      if (diffMs <= 0) return '00:00';
+      const totalSecs = Math.ceil(diffMs / 1000);
+      const hrs = Math.floor(totalSecs / 3600);
+      const mins = Math.floor((totalSecs % 3600) / 60);
+      const secs = totalSecs % 60;
+      if (hrs > 0) {
+        return `${hrs}:${mins.toString().padStart(2, '0')}:${secs
+          .toString()
+          .padStart(2, '0')}`;
+      }
+      return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+
+  _setSleepTimerMinutes(mins, saveAsDefault = true) {
+      const clamped = Math.max(1, Math.min(999, Math.round(mins)));
+      const s = this.player.state.settings;
+      s.playbackMode = 'timer';
+      s.playbackStopTime = Date.now() + clamped * 60000;
+      if (saveAsDefault) {
+        s.lastTimerMinutes = clamped;
+      }
+      this.player._saveState();
+      this.refreshTimerUI();
+    }
+
+  _adjustSleepTimerMinutes(deltaMins) {
+      const s = this.player.state.settings;
+      let baseMins = s.lastTimerMinutes || 30;
+      if (s.playbackMode === 'timer' && s.playbackStopTime && s.playbackStopTime > Date.now()) {
+        baseMins = (s.playbackStopTime - Date.now()) / 60000;
+      }
+      const nextMins = Math.max(1, Math.min(999, Math.round(baseMins + deltaMins)));
+      this._setSleepTimerMinutes(nextMins, true);
+    }
+
+  _stopSleepTimer() {
+      const s = this.player.state.settings;
+      s.playbackMode = 'continuous';
+      s.playbackStopTime = null;
+      this.player._saveState();
+      this.refreshTimerUI();
+    }
+
+  _renderTimerControls() {
+      if (!this.timerContainer) return;
+      this.timerContainer.innerHTML = '';
+
+      if (this._timerInterval) {
+        clearInterval(this._timerInterval);
+        this._timerInterval = null;
+      }
+
+      const s = this.player.state.settings;
+      const isTimerMode = s.playbackMode === 'timer';
+      const lastMins = Math.max(1, parseInt(s.lastTimerMinutes, 10) || 30);
+
+      const card = makeElement('div', {
+        style:
+          'background:#1a1e24; border:1px solid #30363d; border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:10px;',
+      });
+
+      const topRow = makeElement('div', {
+        style: 'display:flex; align-items:center; gap:8px;',
+      });
+
+      const pbSelect = makeElement('select', {
+        style:
+          'flex:1; font-size:13px; font-weight:600; background:#0d1117; color:#f0f6fc; border:1px solid #444; padding:6px 8px; border-radius:6px; cursor:pointer;',
+        title: 'Choose what happens when the video ends.',
+        onchange: (e) => {
+          const val = e.target.value;
+          s.playbackMode = val;
+          if (val !== 'timer') {
+            s.playbackStopTime = null;
+          } else if (!s.playbackStopTime || s.playbackStopTime <= Date.now()) {
+            s.playbackStopTime = Date.now() + lastMins * 60000;
+          }
+          this.player._saveState();
+          this.refreshTimerUI();
+        },
+      });
+
+      [
+        { v: 'continuous', l: 'Loop / Play Next' },
+        { v: 'stop_one', l: 'Stop at End' },
+        { v: 'timer', l: `🌙 Sleep Timer (${lastMins}m)` },
+      ].forEach((m) => {
+        const opt = makeElement('option', { value: m.v }, m.l);
+        if ((s.playbackMode || 'continuous') === m.v) opt.selected = true;
+        pbSelect.appendChild(opt);
+      });
+
+      const quickTimerBtn = makeElement(
+        'button',
+        {
+          className: 'dialog-button',
+          title: isTimerMode
+            ? 'Open Large Sleep Timer'
+            : `Start ${lastMins}m Sleep Timer`,
+          style: `padding:6px 10px; font-size:13px; font-weight:bold; border-radius:6px; white-space:nowrap; ${
+            isTimerMode
+              ? 'background:#1b4332; border-color:#4ade80; color:#4ade80;'
+              : 'background:#21262d; border-color:#444; color:#e6edf3;'
+          }`,
+          onclick: () => {
+            if (!isTimerMode) {
+              this._setSleepTimerMinutes(lastMins, false);
+            } else {
+              this.openSleepTimerDialog();
+            }
+          },
+        },
+        isTimerMode ? '🌙 Big View' : `🌙 ${lastMins}m`
+      );
+
+      topRow.append(pbSelect, quickTimerBtn);
+      card.appendChild(topRow);
+
+      if (isTimerMode) {
+        if (!s.playbackStopTime) {
+          s.playbackStopTime = Date.now() + lastMins * 60000;
+          this.player._saveState();
+        }
+
+        const countdownDisplay = makeElement(
+          'div',
+          {
+            style:
+              'font-size:32px; font-weight:800; color:#4ade80; font-family:monospace; text-align:center; letter-spacing:1px; line-height:1.1; padding:4px 0; text-shadow:0 0 12px rgba(74,222,128,0.25);',
+          },
+          '--:--'
+        );
+
+        const remainingNow =
+          s.playbackStopTime && s.playbackStopTime > Date.now()
+            ? Math.max(1, Math.ceil((s.playbackStopTime - Date.now()) / 60000))
+            : lastMins;
+
+        const minInput = makeElement('input', {
+          type: 'text',
+          inputmode: 'numeric',
+          value: String(remainingNow),
+          'aria-label': 'Sleep timer minutes',
+          style:
+            'width:78px; height:40px; font-size:22px; font-weight:800; background:#0d1117; color:#ffffff; border:2px solid #38bdf8; border-radius:6px; text-align:center; padding:0 6px; box-sizing:border-box;',
+        });
+
+        const commitTypedMinutes = (shouldBlur = false) => {
+          const parsed = parseInt(minInput.value.replace(/[^\d]/g, ''), 10);
+          if (!isNaN(parsed) && parsed >= 1) {
+            this._setSleepTimerMinutes(parsed, true);
+            if (shouldBlur) minInput.blur();
+          }
+        };
+
+        minInput.addEventListener('focus', () => {
+          setTimeout(() => minInput.select(), 0);
+        });
+        minInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            commitTypedMinutes(true);
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            minInput.blur();
+            this.refreshTimerUI();
+          }
+        });
+        minInput.addEventListener('change', () => commitTypedMinutes(false));
+
+        const mkStepBtn = (label, delta) =>
+          makeElement(
+            'button',
+            {
+              className: 'dialog-button',
+              style:
+                'flex:1; height:40px; font-size:14px; font-weight:700; border-radius:6px; background:#21262d; border-color:#444; color:#f0f6fc;',
+              onclick: () => this._adjustSleepTimerMinutes(delta),
+            },
+            label
+          );
+
+        const adjustRow = makeElement(
+          'div',
+          { style: 'display:flex; align-items:center; gap:6px;' },
+          [
+            mkStepBtn('-5', -5),
+            mkStepBtn('-1', -1),
+            makeElement(
+              'div',
+              { style: 'display:flex; align-items:center; gap:4px;' },
+              minInput,
+              makeElement(
+                'span',
+                { style: 'font-size:13px; color:#9da7b3; font-weight:700;' },
+                'm'
+              )
+            ),
+            mkStepBtn('+1', +1),
+            mkStepBtn('+5', +5),
+          ]
+        );
+
+        const presetsRow = makeElement('div', {
+          style: 'display:grid; grid-template-columns:repeat(6, 1fr); gap:5px;',
+        });
+        [15, 30, 45, 60, 90, 120].forEach((m) => {
+          const isSelected = lastMins === m;
+          presetsRow.appendChild(
+            makeElement(
+              'button',
+              {
+                className: 'dialog-button',
+                style: `padding:7px 2px; font-size:12px; font-weight:700; border-radius:6px; ${
+                  isSelected
+                    ? 'background:#0c4a6e; border-color:#38bdf8; color:#e0f2fe;'
+                    : 'background:#161b22; border-color:#30363d; color:#c9d1d9;'
+                }`,
+                onclick: () => this._setSleepTimerMinutes(m, true),
+              },
+              `${m}m`
+            )
+          );
+        });
+
+        const bottomRow = makeElement('div', {
+          style: 'display:flex; gap:8px;',
+        });
+        bottomRow.append(
+          makeElement(
+            'button',
+            {
+              className: 'dialog-button',
+              style:
+                'flex:1; padding:8px; font-size:12px; font-weight:700; border-radius:6px; background:#3b1d1d; border-color:#7f1d1d; color:#fca5a5;',
+              onclick: () => this._stopSleepTimer(),
+            },
+            'Turn Off Timer'
+          )
+        );
+
+        const updateCountdown = () => {
+          if (!countdownDisplay.isConnected) {
+            if (this._timerInterval) {
+              clearInterval(this._timerInterval);
+              this._timerInterval = null;
+            }
+            return;
+          }
+          const stopTime = s.playbackStopTime;
+          if (!stopTime || s.playbackMode !== 'timer') {
+            countdownDisplay.textContent = 'OFF';
+            countdownDisplay.style.color = '#888';
+            return;
+          }
+          const diff = stopTime - Date.now();
+          if (diff <= 0) {
+            countdownDisplay.textContent = '00:00';
+            countdownDisplay.style.color = '#f87171';
+          } else {
+            countdownDisplay.textContent = this._formatTimerRemaining(diff);
+            countdownDisplay.style.color = '#4ade80';
+            if (document.activeElement !== minInput) {
+              const minsLeft = Math.max(1, Math.ceil(diff / 60000));
+              if (minInput.value !== String(minsLeft)) {
+                minInput.value = String(minsLeft);
+              }
+            }
+          }
+        };
+
+        updateCountdown();
+        this._timerInterval = setInterval(updateCountdown, 1000);
+
+        card.append(countdownDisplay, adjustRow, presetsRow, bottomRow);
+      }
+
+      this.timerContainer.appendChild(card);
+    }
+
+  openSleepTimerDialog() {
+      if (this._sleepTimerDialog && this._sleepTimerDialog.element?.isConnected) {
+        this._sleepTimerDialog.setZOnTop();
+        this._renderSleepTimerDialogBody(this._sleepTimerDialogBody);
+        return;
+      }
+
+      const body = makeElement('div', {
+        style:
+          'display:flex; flex-direction:column; gap:14px; padding:12px; background:#0d1117; color:#f0f6fc; font-family:system-ui, -apple-system, sans-serif;',
+      });
+      this._sleepTimerDialogBody = body;
+      this._renderSleepTimerDialogBody(body);
+
+      this._sleepTimerDialog = UITools.makeDialog({
+        env: this.player.env,
+        title: '🌙 Sleep Timer',
+        content: body,
+        width: '400px',
+        appendTo: this.player.rootElement,
+        onClose: () => {
+          if (this._sleepDialogInterval) {
+            clearInterval(this._sleepDialogInterval);
+            this._sleepDialogInterval = null;
+          }
+          this._sleepTimerDialog = null;
+          this._sleepTimerDialogBody = null;
+        },
+      });
+    }
+
+  _renderSleepTimerDialogBody(body) {
+      if (!body) return;
+      body.innerHTML = '';
+
+      if (this._sleepDialogInterval) {
+        clearInterval(this._sleepDialogInterval);
+        this._sleepDialogInterval = null;
+      }
+
+      const s = this.player.state.settings;
+      const isActive =
+        s.playbackMode === 'timer' && s.playbackStopTime && s.playbackStopTime > Date.now();
+      const lastMins = Math.max(1, parseInt(s.lastTimerMinutes, 10) || 30);
+      const displayMins = isActive
+        ? Math.max(1, Math.ceil((s.playbackStopTime - Date.now()) / 60000))
+        : lastMins;
+
+      const statusLine = makeElement(
+        'div',
+        {
+          style:
+            'text-align:center; font-size:13px; color:#9da7b3; font-weight:600; text-transform:uppercase; letter-spacing:1px;',
+        },
+        isActive ? 'Playing Until Sleep Timer' : `Timer Off (Last Used: ${lastMins} min)`
+      );
+
+      const bigClock = makeElement(
+        'div',
+        {
+          style: `font-size:48px; font-weight:800; font-family:monospace; text-align:center; line-height:1.1; padding:8px 0; color:${
+            isActive ? '#4ade80' : '#7d8590'
+          };`,
+        },
+        isActive ? this._formatTimerRemaining(s.playbackStopTime - Date.now()) : `${lastMins}:00`
+      );
+
+      const numInput = makeElement('input', {
+        type: 'text',
+        inputmode: 'numeric',
+        value: String(displayMins),
+        'aria-label': 'Minutes to play',
+        style:
+          'width:104px; height:52px; font-size:30px; font-weight:800; text-align:center; background:#161b22; color:#ffffff; border:2px solid #38bdf8; border-radius:8px; padding:0 8px; box-sizing:border-box;',
+      });
+
+      const applyTyped = (shouldBlur = false) => {
+        const val = parseInt(numInput.value.replace(/[^\d]/g, ''), 10);
+        if (!isNaN(val) && val >= 1) {
+          this._setSleepTimerMinutes(val, true);
+          if (shouldBlur) numInput.blur();
+        }
+      };
+
+      numInput.addEventListener('focus', () => setTimeout(() => numInput.select(), 0));
+      numInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          applyTyped(true);
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          numInput.blur();
+        }
+      });
+      numInput.addEventListener('change', () => applyTyped(false));
+
+      const mkBigBtn = (label, delta) =>
+        makeElement(
+          'button',
+          {
+            className: 'dialog-button',
+            style:
+              'flex:1; height:52px; font-size:17px; font-weight:800; border-radius:8px; background:#21262d; border-color:#444; color:#ffffff;',
+            onclick: () => this._adjustSleepTimerMinutes(delta),
+          },
+          label
+        );
+
+      const stepRow = makeElement(
+        'div',
+        { style: 'display:flex; align-items:center; gap:8px;' },
+        [
+          mkBigBtn('-10', -10),
+          mkBigBtn('-5', -5),
+          numInput,
+          mkBigBtn('+5', +5),
+          mkBigBtn('+10', +10),
+        ]
+      );
+
+      const presetGrid = makeElement('div', {
+        style: 'display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;',
+      });
+      [15, 30, 45, 60, 90, 120].forEach((m) => {
+        const selected = displayMins === m && isActive;
+        presetGrid.appendChild(
+          makeElement(
+            'button',
+            {
+              className: 'dialog-button',
+              style: `height:44px; font-size:16px; font-weight:800; border-radius:8px; ${
+                selected || (!isActive && lastMins === m)
+                  ? 'background:#0c4a6e; border-color:#38bdf8; color:#e0f2fe;'
+                  : 'background:#161b22; border-color:#30363d; color:#e6edf3;'
+              }`,
+              onclick: () => this._setSleepTimerMinutes(m, true),
+            },
+            `${m} min`
+          )
+        );
+      });
+
+      const footerRow = makeElement('div', {
+        style: 'display:flex; gap:10px; margin-top:4px;',
+      });
+
+      if (isActive) {
+        footerRow.appendChild(
+          makeElement(
+            'button',
+            {
+              className: 'dialog-button',
+              style:
+                'flex:1; height:44px; font-size:15px; font-weight:800; border-radius:8px; background:#3b1d1d; border-color:#7f1d1d; color:#fca5a5;',
+              onclick: () => this._stopSleepTimer(),
+            },
+            'Turn Off Timer'
+          )
+        );
+      } else {
+        footerRow.appendChild(
+          makeElement(
+            'button',
+            {
+              className: 'dialog-button primary',
+              style:
+                'flex:1; height:44px; font-size:15px; font-weight:800; border-radius:8px;',
+              onclick: () => {
+                const val = parseInt(numInput.value.replace(/[^\d]/g, ''), 10) || lastMins;
+                this._setSleepTimerMinutes(val, true);
+              },
+            },
+            `Start ${displayMins} min Timer`
+          )
+        );
+      }
+
+      footerRow.appendChild(
+        makeElement(
+          'button',
+          {
+            className: 'dialog-button',
+            style:
+              'flex:0 0 90px; height:44px; font-size:15px; font-weight:700; border-radius:8px;',
+            onclick: () => this._sleepTimerDialog?.close(),
+          },
+          'Done'
+        )
+      );
+
+      const tick = () => {
+        if (!bigClock.isConnected) {
+          if (this._sleepDialogInterval) {
+            clearInterval(this._sleepDialogInterval);
+            this._sleepDialogInterval = null;
+          }
+          return;
+        }
+        if (s.playbackMode === 'timer' && s.playbackStopTime) {
+          const diff = s.playbackStopTime - Date.now();
+          if (diff <= 0) {
+            bigClock.textContent = '00:00';
+            bigClock.style.color = '#f87171';
+          } else {
+            bigClock.textContent = this._formatTimerRemaining(diff);
+            bigClock.style.color = '#4ade80';
+            if (document.activeElement !== numInput) {
+              const minsLeft = Math.max(1, Math.ceil(diff / 60000));
+              if (numInput.value !== String(minsLeft)) {
+                numInput.value = String(minsLeft);
+              }
+            }
+          }
+        }
+      };
+      this._sleepDialogInterval = setInterval(tick, 1000);
+
+      body.append(statusLine, bigClock, stepRow, presetGrid, footerRow);
+    }
 }
 

@@ -182,13 +182,18 @@ class GlowTunesPlayer {
   }
 
   seekTo(timeInSeconds) {
-    if (this.videoPlayer && this.videoPlayer.isReady) {
-      this.videoPlayer.seekTo(timeInSeconds);
-    } else {
-      this._pendingSeekTime = timeInSeconds;
+      if (this.videoPlayer && this.videoPlayer.isReady) {
+        this.videoPlayer.seekTo(timeInSeconds);
+        if (!this.videoPlayer.isPlaying()) {
+          const nowMs = Math.max(0, timeInSeconds * 1000);
+          this.pianoVisuals?.setTime?.(nowMs, 0, true);
+          this.karaokeDisplay?.setTime?.(nowMs, true);
+          this.handleTimeUpdate(timeInSeconds, false, true);
+        }
+      } else {
+        this._pendingSeekTime = timeInSeconds;
+      }
     }
-  }
-
   setInstrumentVolume(level) {
     this.instruments?.setVolume(level);
   }
